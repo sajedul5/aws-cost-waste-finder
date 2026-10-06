@@ -14,7 +14,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | `scanner.py` | Builds the boto3 session (default credential chain, or assumed role), resolves regions, runs every registered check, collects findings. |
 | `checks/` | One module per waste check. Each takes `(session, region)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
 | `models.py` | `Finding` dataclass: check id, resource ID, region, reason, details, monthly cost. |
-| `pricing.py` | AWS Pricing API client. Always called in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)"). In-memory cache per run. |
+| `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. `apply_costs()` fills `monthly_cost` via a check-id → cost-function map; unknown prices stay `None`. |
 | `report.py` | Sorts findings by monthly cost, renders Markdown (later CSV/JSON/HTML), prints "You can save ~$X/month". |
 
 ## Data flow
