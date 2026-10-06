@@ -18,5 +18,5 @@ def fixed_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     from cost_waste_finder.pricing import PricingClient
 
     monkeypatch.setattr(
-        PricingClient, "get_price", lambda self, service, filters, usagetype_suffix=None: 0.10
+        PricingClient, "get_price", lambda self, service, filters, usagetype=None: 0.10
     )

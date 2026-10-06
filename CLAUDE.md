@@ -9,7 +9,8 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 
 ## Rules (always follow)
 - Read-only: only `Describe*`, `List*`, `Get*` calls and the Pricing API. Never create, modify or delete AWS resources.
-- No Cost Explorer (charged per call). No Lambda: local CLI only. Never scan real AWS from CI.
+- Cost Explorer only in `cwf bill` / `cwf dashboard` (opt-in, ~$0.01/call, print call count); never in `cwf scan`.
+- No Lambda: local CLI only. Never scan real AWS from CI.
 - No stored keys in the repo: default AWS credential chain (optional gitignored `.env`, see `.env.example`); `--role-arn` comes in step 8. Never read `.env`.
 - Never hard-code a region: `--region`, else the AWS config default. (Owner's account: ap-southeast-1.)
 - Never commit account IDs, ARNs, real reports or client data. Use fake IDs in examples.
@@ -28,11 +29,13 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 3. Pricing API client (us-east-1, location filter, in-memory cache); findings get monthly cost
 - [x] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
 - [x] 5. Checks: old snapshots (>90d, not used by AMI), unattached EIPs, gp2 -> gp3
-- [ ] 6. CloudWatch checks (14d, configurable thresholds): idle EC2, idle NAT GW, idle LBs
+- [x] 6. CloudWatch checks (14d, configurable thresholds): idle EC2, idle NAT GW, idle LBs
 - [ ] 7. Stopped EC2 >30d with volumes; `--all-regions`
 - [ ] 8. `--role-arn` and iam/read-only-policy.json
 - [ ] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
-- [ ] 10. README polish, examples/sample-report.md (fake IDs), architecture diagram
+- [ ] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down
+- [ ] 11. `cwf dashboard`: one self-contained HTML (inline SVG), bill trend + waste + actions, `--title`
+- [ ] 12. README polish, examples/sample-report.md + sample dashboard (fake IDs), architecture diagram
 
 ## Commands
 ```sh

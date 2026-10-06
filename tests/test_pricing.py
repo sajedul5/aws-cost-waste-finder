@@ -204,3 +204,96 @@ def test_unattached_eip_cost(pricing: PricingClient, singapore_prices: None) -> 
     finding = finding_for("unattached-eip")
     apply_costs([finding], pricing)
     assert finding.monthly_cost == 3.65
+
+
+@pytest.mark.parametrize(
+    ("actual", "wanted", "matches"),
+    [
+        ("APS1-EBS:SnapshotUsage", "EBS:SnapshotUsage", True),
+        ("EBS:SnapshotUsage", "EBS:SnapshotUsage", True),  # us-east-1 has no prefix
+        ("APS1-EBS:SnapshotUsage.outposts", "EBS:SnapshotUsage", False),
+        ("APS1-LoadBalancerUsage", "LoadBalancerUsage", True),
+        ("APS1-TS-LoadBalancerUsage", "LoadBalancerUsage", False),
+        ("APS1-Outposts-LoadBalancerUsage", "LoadBalancerUsage", False),
+        ("APS1-NatGateway-Hours", "NatGateway-Hours", True),
+        ("APS1-RegionalNatGateway-Hours", "NatGateway-Hours", False),
+    ],
+)
+def test_usagetype_matches(actual: str, wanted: str, matches: bool) -> None:
+    from cost_waste_finder.pricing import _usagetype_matches
+
+    assert _usagetype_matches(actual, wanted) is matches
+
+
+def test_load_balancer_price_skips_outposts_and_trust_store(pricing: PricingClient) -> None:
+    request = {
+        "ServiceCode": "AWSELB",
+        "Filters": [
+            {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "Load Balancer-Application"},
+            {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
+        ],
+        "MaxResults": 100,
+    }
+    products = [
+        priced_item("APS1-TS-LoadBalancerUsage", "0.0056"),
+        priced_item("APS1-Outposts-LoadBalancerUsage", "0.03"),
+        priced_item("APS1-LoadBalancerUsage", "0.0252"),
+    ]
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": products}, request)
+        assert pricing.load_balancer_hourly_price(REGION, "application") == pytest.approx(0.0252)
+
+
+def test_ec2_instance_price_filters(pricing: PricingClient) -> None:
+    request = {
+        "ServiceCode": "AmazonEC2",
+        "Filters": [
+            {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "Compute Instance"},
+            {"Type": "TERM_MATCH", "Field": "instanceType", "Value": "t3.micro"},
+            {"Type": "TERM_MATCH", "Field": "operatingSystem", "Value": "Windows"},
+            {"Type": "TERM_MATCH", "Field": "tenancy", "Value": "Shared"},
+            {"Type": "TERM_MATCH", "Field": "preInstalledSw", "Value": "NA"},
+            {"Type": "TERM_MATCH", "Field": "capacitystatus", "Value": "Used"},
+            {"Type": "TERM_MATCH", "Field": "licenseModel", "Value": "No License required"},
+            {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
+        ],
+        "MaxResults": 100,
+    }
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": [price_item("0.0224")]}, request)
+        price = pricing.ec2_instance_hourly_price(REGION, "t3.micro", "Windows")
+        assert price == pytest.approx(0.0224)
+
+
+@pytest.fixture
+def hourly_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real Singapore hourly prices (Oct 2026) without API calls."""
+    monkeypatch.setattr(
+        PricingClient,
+        "ec2_instance_hourly_price",
+        lambda self, r, t, os="Linux": {"Linux": 0.0132, "Windows": 0.0224}[os],
+    )
+    monkeypatch.setattr(PricingClient, "nat_gateway_hourly_price", lambda self, r: 0.059)
+    monkeypatch.setattr(
+        PricingClient,
+        "load_balancer_hourly_price",
+        lambda self, r, kind: {"application": 0.0252, "network": 0.0252, "classic": 0.028}[kind],
+    )
+
+
+@pytest.mark.parametrize(
+    ("check", "details", "expected"),
+    [
+        ("idle-ec2", {"instance_type": "t3.micro", "operating_system": "Linux"}, 9.64),
+        ("idle-ec2", {"instance_type": "t3.micro", "operating_system": "Windows"}, 16.35),
+        ("idle-nat-gateway", {}, 43.07),
+        ("idle-load-balancer", {"kind": "application"}, 18.40),
+        ("idle-load-balancer", {"kind": "classic"}, 20.44),
+    ],
+)
+def test_hourly_costs(
+    pricing: PricingClient, hourly_prices: None, check: str, details: dict, expected: float
+) -> None:
+    finding = finding_for(check, **details)
+    apply_costs([finding], pricing)
+    assert finding.monthly_cost == pytest.approx(expected)

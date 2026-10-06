@@ -5,14 +5,17 @@ description: How to add a new waste check to cost_waste_finder (check module in 
 
 # Add a waste check
 
-A check is a function that takes a boto3 `Session` and a region and returns a list of
+A check is a function that takes a boto3 `Session`, a region and `Thresholds` and returns a list of
 `Finding`s. It must be **read-only** (`Describe*`, `List*`, `Get*` only) and never hard-code a region.
 
 ## 1. Write the check: `src/cost_waste_finder/checks/<name>.py`
 - One module per check, named after what it finds (e.g. `unattached_ebs.py`).
-- Signature: `def check(session: boto3.Session, region: str) -> list[Finding]:`
+- Signature: `def check(session: boto3.Session, region: str, thresholds: Thresholds) -> list[Finding]:`
+  Idle checks that use time also take `now: datetime | None = None` so tests can move time.
 - Use paginators for every `Describe*`/`List*` call.
-- Thresholds (days, CPU %, etc.) are keyword arguments with defaults, never magic numbers inline.
+- Thresholds (days, CPU %, etc.) go in `config.Thresholds` with a default and a matching `cwf scan`
+  option in `cli.py`. Never magic numbers inline.
+- CloudWatch data: use `metrics.daily_values()`; skip resources younger than `lookback_days`.
 - Leave `monthly_cost` to the pricing layer unless the check already knows it.
 
 ## 2. Return `Finding`s (`src/cost_waste_finder/models.py`)

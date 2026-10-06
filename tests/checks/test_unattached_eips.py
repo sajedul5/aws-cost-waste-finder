@@ -2,6 +2,7 @@ import boto3
 from moto import mock_aws
 
 from cost_waste_finder.checks import CHECKS, unattached_eips
+from cost_waste_finder.config import Thresholds
 
 REGION = "ap-southeast-1"
 
@@ -22,7 +23,7 @@ def test_finds_only_unassociated_eip() -> None:
     ec2.associate_address(AllocationId=associated, InstanceId=instance_id)
     idle = ec2.allocate_address(Domain="vpc")["AllocationId"]
 
-    findings = unattached_eips.check(session, REGION)
+    findings = unattached_eips.check(session, REGION, Thresholds())
 
     assert [f.resource_id for f in findings] == [idle]
     assert findings[0].check == "unattached-eip"
@@ -32,14 +33,14 @@ def test_finds_only_unassociated_eip() -> None:
 
 @mock_aws
 def test_no_addresses_no_findings() -> None:
-    assert unattached_eips.check(make_session(), REGION) == []
+    assert unattached_eips.check(make_session(), REGION, Thresholds()) == []
 
 
 @mock_aws
 def test_only_scans_given_region() -> None:
     boto3.client("ec2", region_name="us-east-1").allocate_address(Domain="vpc")
 
-    assert unattached_eips.check(make_session(), REGION) == []
+    assert unattached_eips.check(make_session(), REGION, Thresholds()) == []
 
 
 def test_check_is_registered() -> None:

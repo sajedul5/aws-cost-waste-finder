@@ -24,7 +24,7 @@ def test_scan_finds_and_prices(fixed_prices: None) -> None:
 def test_failing_check_is_skipped(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture, fixed_prices: None
 ) -> None:
-    def denied(session, region):
+    def denied(session, region, thresholds):
         raise ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "DescribeX")
 
     denied.__module__ = "cost_waste_finder.checks.denied_check"
@@ -42,7 +42,7 @@ def test_failing_check_is_skipped(
 def test_pricing_failure_leaves_costs_unknown(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    def denied(self, service, filters, usagetype_suffix=None):
+    def denied(self, service, filters, usagetype=None):
         raise ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "GetProducts")
 
     monkeypatch.setattr(PricingClient, "get_price", denied)

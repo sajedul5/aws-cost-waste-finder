@@ -2,6 +2,7 @@ import boto3
 from moto import mock_aws
 
 from cost_waste_finder.checks import CHECKS, gp2_volumes
+from cost_waste_finder.config import Thresholds
 
 REGION = "ap-southeast-1"
 AZ = f"{REGION}a"
@@ -28,7 +29,7 @@ def test_finds_only_attached_gp2() -> None:
     attached_gp3 = volume("gp3", 200, "/dev/sdg")
     unattached_gp2 = volume("gp2", 200, None)  # reported by unattached-ebs instead
 
-    findings = {f.resource_id: f for f in gp2_volumes.check(session, REGION)}
+    findings = {f.resource_id: f for f in gp2_volumes.check(session, REGION, Thresholds())}
 
     # moto also gives the instance a gp2 root volume, which is correctly reported too.
     assert attached_gp2 in findings
@@ -42,7 +43,7 @@ def test_finds_only_attached_gp2() -> None:
 
 @mock_aws
 def test_no_volumes_no_findings() -> None:
-    assert gp2_volumes.check(boto3.Session(region_name=REGION), REGION) == []
+    assert gp2_volumes.check(boto3.Session(region_name=REGION), REGION, Thresholds()) == []
 
 
 def test_check_is_registered() -> None:

@@ -4,8 +4,10 @@ import boto3
 from moto import mock_aws
 
 from cost_waste_finder.checks import CHECKS, old_snapshots
+from cost_waste_finder.config import Thresholds
 
 REGION = "ap-southeast-1"
+DEFAULTS = Thresholds()
 
 
 def make_session() -> boto3.Session:
@@ -29,8 +31,10 @@ def builtin_snapshots(session: boto3.Session) -> set[str]:
     return {s["SnapshotId"] for page in pages for s in page["Snapshots"]}
 
 
-def run_check(session: boto3.Session, ignore: set[str], **kwargs) -> list:
-    findings = old_snapshots.check(session, REGION, **kwargs)
+def run_check(
+    session: boto3.Session, ignore: set[str], thresholds: Thresholds = DEFAULTS, **kwargs
+) -> list:
+    findings = old_snapshots.check(session, REGION, thresholds, **kwargs)
     return [f for f in findings if f.resource_id not in ignore]
 
 
@@ -66,7 +70,7 @@ def test_threshold_is_configurable() -> None:
     ignore = builtin_snapshots(session)
     create_snapshot(session.client("ec2"))
 
-    assert run_check(session, ignore, min_age_days=30, now=days_later(31))
+    assert run_check(session, ignore, Thresholds(snapshot_age_days=30), now=days_later(31))
 
 
 @mock_aws
