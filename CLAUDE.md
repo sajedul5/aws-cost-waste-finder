@@ -26,7 +26,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 1. Setup: src/ package `cost_waste_finder`, pyproject.toml, minimal `cwf` CLI, GitHub Actions CI (ruff + pytest)
 - [x] 2. Check: unattached EBS volumes
 - [x] 3. Pricing API client (us-east-1, location filter, in-memory cache); findings get monthly cost
-- [ ] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
+- [x] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
 - [ ] 5. Checks: old snapshots (>90d, not used by AMI), unattached EIPs, gp2 -> gp3
 - [ ] 6. CloudWatch checks (14d, configurable thresholds): idle EC2, idle NAT GW, idle LBs
 - [ ] 7. Stopped EC2 >30d with volumes; `--all-regions`
