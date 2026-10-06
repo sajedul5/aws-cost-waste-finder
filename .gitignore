@@ -1,0 +1,16 @@
+# Local / private
+CLAUDE.local.md
+.claude/settings.local.json
+reports/
+*.local.*
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.coverage
