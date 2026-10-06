@@ -10,7 +10,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 ## Rules (always follow)
 - Read-only: only `Describe*`, `List*`, `Get*` calls and the Pricing API. Never create, modify or delete AWS resources.
 - No Cost Explorer (charged per call). No Lambda: local CLI only. Never scan real AWS from CI.
-- No stored keys: default AWS credential chain; `--role-arn` comes in step 8.
+- No stored keys in the repo: default AWS credential chain (optional gitignored `.env`, see `.env.example`); `--role-arn` comes in step 8. Never read `.env`.
 - Never hard-code a region: `--region`, else the AWS config default. (Owner's account: ap-southeast-1.)
 - Never commit account IDs, ARNs, real reports or client data. Use fake IDs in examples.
 - Every check gets a moto unit test. CI never calls real AWS.
@@ -23,7 +23,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 
 ## Plan
 - [x] 0. Claude Code setup: CLAUDE.md, .claude/settings.json, skills, docs/
-- [ ] 1. Setup: src/ package `cost_waste_finder`, pyproject.toml, minimal `cwf` CLI, GitHub Actions CI (ruff + pytest)
+- [x] 1. Setup: src/ package `cost_waste_finder`, pyproject.toml, minimal `cwf` CLI, GitHub Actions CI (ruff + pytest)
 - [ ] 2. Check: unattached EBS volumes
 - [ ] 3. Pricing API client (us-east-1, location filter, in-memory cache); findings get monthly cost
 - [ ] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
@@ -36,7 +36,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 
 ## Commands
 ```sh
-python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup (from step 1)
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup
 .venv/bin/ruff check . && .venv/bin/ruff format --check .     # lint
 .venv/bin/pytest                                               # test
 .venv/bin/cwf scan --region ap-southeast-1                     # run (real AWS: owner approves)

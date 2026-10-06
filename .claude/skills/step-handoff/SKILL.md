@@ -25,13 +25,13 @@ The owner does all commits, pushes, PRs and merges. You only prepare them.
    (not `git add .`):
    ```sh
    git add <files>
-   git commit -m "<type>: <short summary>" -m "<body>"
+   git commit -m "<type>: <short summary>"
    git push -u origin <branch>
-   gh pr create --base main --title "<title>" --body "<body>"
+   gh pr create --base main --title "<title>" --body "<one short line>"
    ```
-   Use conventional-commit style (`feat:`, `chore:`, `docs:`, `test:`, `ci:`).
-   End the commit message and PR body with the attribution lines from the current session's
-   instructions, if any.
+   Commit message: one simple line only, conventional-commit style (`feat:`, `chore:`, `docs:`,
+   `test:`, `ci:`). No body, no description, no Co-Authored-By or any Claude attribution.
+   PR body: one short plain line, no "Generated with Claude Code".
 
 6. **From step 4 on**, also print the real-account test command for the owner:
    ```sh
