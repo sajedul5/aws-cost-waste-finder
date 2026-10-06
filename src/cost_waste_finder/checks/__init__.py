@@ -10,6 +10,7 @@ from cost_waste_finder.checks import (
     idle_load_balancers,
     idle_nat_gateways,
     old_snapshots,
+    stopped_ec2,
     unattached_ebs,
     unattached_eips,
 )
@@ -26,4 +27,5 @@ CHECKS: list[Check] = [
     idle_ec2.check,
     idle_nat_gateways.check,
     idle_load_balancers.check,
+    stopped_ec2.check,
 ]

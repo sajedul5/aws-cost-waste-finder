@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from collections.abc import Callable
 
 import boto3
@@ -35,11 +36,15 @@ def location_name(region: str) -> str:
 
 
 class PricingClient:
-    """Looks up on-demand USD prices. Each distinct lookup hits the API once per run."""
+    """Looks up on-demand USD prices. Each distinct lookup hits the API once per run.
+
+    Safe to share between threads: the lock makes parallel region scans reuse one cache.
+    """
 
     def __init__(self, session: boto3.Session) -> None:
         self._client = session.client("pricing", region_name=PRICING_REGION)
         self._cache: dict[tuple, float | None] = {}
+        self._lock = threading.Lock()
 
     def get_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None = None
@@ -51,9 +56,10 @@ class PricingClient:
         "APS1-EBS:SnapshotUsage.outposts" or "APS1-TS-LoadBalancerUsage".
         """
         key = (service_code, tuple(sorted(filters.items())), usagetype)
-        if key not in self._cache:
-            self._cache[key] = self._fetch_price(service_code, filters, usagetype)
-        return self._cache[key]
+        with self._lock:
+            if key not in self._cache:
+                self._cache[key] = self._fetch_price(service_code, filters, usagetype)
+            return self._cache[key]
 
     def _fetch_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None
@@ -221,6 +227,17 @@ def _idle_load_balancer_cost(finding: Finding, pricing: PricingClient) -> float 
     return None if price is None else round(price * HOURS_PER_MONTH, 2)
 
 
+def _stopped_ec2_cost(finding: Finding, pricing: PricingClient) -> float | None:
+    """Storage of every volume still attached to the stopped instance."""
+    total = 0.0
+    for volume in finding.details["volumes"]:
+        price = pricing.ebs_storage_price(finding.region, volume["volume_type"])
+        if price is None:
+            return None
+        total += volume["size_gib"] * price
+    return round(total, 2)
+
+
 COST_FUNCTIONS: dict[str, Callable[[Finding, PricingClient], float | None]] = {
     "unattached-ebs": _unattached_ebs_cost,
     "old-snapshot": _old_snapshot_cost,
@@ -229,6 +246,7 @@ COST_FUNCTIONS: dict[str, Callable[[Finding, PricingClient], float | None]] = {
     "idle-ec2": _idle_ec2_cost,
     "idle-nat-gateway": _idle_nat_gateway_cost,
     "idle-load-balancer": _idle_load_balancer_cost,
+    "stopped-ec2": _stopped_ec2_cost,
 }
 
 

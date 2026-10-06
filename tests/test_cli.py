@@ -81,11 +81,11 @@ def test_scan_help_lists_threshold_options() -> None:
 def test_scan_passes_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
     seen = {}
 
-    def fake_scan(session, region, thresholds):
+    def fake_scan(session, regions, thresholds):
         seen["thresholds"] = thresholds
         return []
 
-    monkeypatch.setattr("cost_waste_finder.cli.run_scan", fake_scan)
+    monkeypatch.setattr("cost_waste_finder.cli.scan_regions", fake_scan)
     args = ["scan", "--region", REGION, "--cpu-threshold", "10", "--lookback-days", "7"]
     result = CliRunner().invoke(cli, args)
 
@@ -98,3 +98,26 @@ def test_scan_passes_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_scan_rejects_zero_lookback() -> None:
     result = CliRunner().invoke(cli, ["scan", "--region", REGION, "--lookback-days", "0"])
     assert result.exit_code != 0
+
+
+@mock_aws
+def test_scan_all_regions(monkeypatch: pytest.MonkeyPatch, fixed_prices: None) -> None:
+    regions = ["ap-southeast-1", "ap-southeast-2"]
+    monkeypatch.setattr(
+        "cost_waste_finder.cli.enabled_regions", lambda session, any_region: regions
+    )
+    boto3.client("ec2", region_name="ap-southeast-2").create_volume(
+        AvailabilityZone="ap-southeast-2a", Size=100
+    )
+
+    result = CliRunner().invoke(cli, ["scan", "--all-regions"])
+
+    assert result.exit_code == 0, result.output
+    assert "Regions (2): ap-southeast-1, ap-southeast-2" in result.stdout
+    assert "| ap-southeast-2 |" in result.stdout
+
+
+def test_scan_rejects_region_with_all_regions() -> None:
+    result = CliRunner().invoke(cli, ["scan", "--region", REGION, "--all-regions"])
+    assert result.exit_code != 0
+    assert "either --region or --all-regions" in result.output

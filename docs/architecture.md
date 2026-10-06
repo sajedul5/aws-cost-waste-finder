@@ -11,18 +11,21 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | Component | Responsibility |
 |---|---|
 | `cli.py` | Click entry point `cwf`. Loads optional `.env`, builds the session, resolves `--region` (else config default), runs the scanner, prints the report. Credential errors become a clear message. Later: `--all-regions`, `--role-arn`, `--format`, `--output`. |
-| `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
+| `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. `scan_regions()` loops over regions; `enabled_regions()` lists the account's enabled regions. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region, thresholds)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
 | `config.py` | `Thresholds` dataclass: lookback days and per-check limits; every value is a `cwf scan` option. |
 | `metrics.py` | `daily_values()`: one CloudWatch `GetMetricStatistics` value per day (Average or Sum) for the idle checks. |
 | `models.py` | `Finding` dataclass: check id, resource ID, region, reason, details, monthly cost. |
 | `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. Lookups: EBS storage, gp3 IOPS, snapshot storage (standard/archive), idle public IPv4 (AmazonVPC), EC2 instance (Linux/Windows), NAT Gateway, load balancer (AWSELB). Products can be picked by usagetype without its region prefix. `apply_costs()` fills `monthly_cost` (the monthly saving) via a check-id → cost-function map; unknown prices stay `None`. |
-| `report.py` | `render_markdown()`: region + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. Later CSV/JSON/HTML. |
+| `report.py` | `render_markdown()`: region(s) + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. Later CSV/JSON/HTML. |
 
 ## Data flow
 
-1. CLI resolves the region: `--region`, else the AWS config default. Never hard-coded.
-2. Scanner creates one `boto3.Session` and, per region, calls each check.
+1. CLI resolves the regions: `--region`, else the AWS config default (never hard-coded), or with
+   `--all-regions` every region enabled for the account (`DescribeRegions`).
+2. Scanner uses one `boto3.Session` and one `PricingClient` (shared, locked price cache);
+   `scan_regions()` scans up to 8 regions in parallel threads (progress on stderr) and calls each
+   check per region. Findings keep the region order.
 3. Each check paginates `Describe*`/`List*` calls (and CloudWatch `GetMetricStatistics` for
    idle checks) and returns findings without cost.
 4. Pricing fills `monthly_cost` per finding, caching prices by (service, region, attributes).

@@ -297,3 +297,10 @@ def test_hourly_costs(
     finding = finding_for(check, **details)
     apply_costs([finding], pricing)
     assert finding.monthly_cost == pytest.approx(expected)
+
+
+def test_stopped_ec2_cost(pricing: PricingClient, singapore_prices: None) -> None:
+    volumes = [{"volume_type": "gp3", "size_gib": 100}, {"volume_type": "gp2", "size_gib": 8}]
+    finding = finding_for("stopped-ec2", volumes=volumes, stopped_days=40)
+    apply_costs([finding], pricing)
+    assert finding.monthly_cost == pytest.approx(100 * 0.096 + 8 * 0.12)
