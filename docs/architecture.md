@@ -23,8 +23,9 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 
 1. CLI resolves the regions: `--region`, else the AWS config default (never hard-coded), or with
    `--all-regions` every region enabled for the account (`DescribeRegions`).
-2. Scanner uses one `boto3.Session` and one `PricingClient` (shared price cache); `scan_regions()`
-   scans the regions one after another (progress on stderr) and calls each check per region.
+2. Scanner uses one `boto3.Session` and one `PricingClient` (shared, locked price cache);
+   `scan_regions()` scans up to 8 regions in parallel threads (progress on stderr) and calls each
+   check per region. Findings keep the region order.
 3. Each check paginates `Describe*`/`List*` calls (and CloudWatch `GetMetricStatistics` for
    idle checks) and returns findings without cost.
 4. Pricing fills `monthly_cost` per finding, caching prices by (service, region, attributes).

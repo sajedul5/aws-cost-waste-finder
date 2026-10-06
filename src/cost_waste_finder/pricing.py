@@ -2,6 +2,7 @@
 
 import json
 import re
+import threading
 from collections.abc import Callable
 
 import boto3
@@ -35,11 +36,15 @@ def location_name(region: str) -> str:
 
 
 class PricingClient:
-    """Looks up on-demand USD prices. Each distinct lookup hits the API once per run."""
+    """Looks up on-demand USD prices. Each distinct lookup hits the API once per run.
+
+    Safe to share between threads: the lock makes parallel region scans reuse one cache.
+    """
 
     def __init__(self, session: boto3.Session) -> None:
         self._client = session.client("pricing", region_name=PRICING_REGION)
         self._cache: dict[tuple, float | None] = {}
+        self._lock = threading.Lock()
 
     def get_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None = None
@@ -51,9 +56,10 @@ class PricingClient:
         "APS1-EBS:SnapshotUsage.outposts" or "APS1-TS-LoadBalancerUsage".
         """
         key = (service_code, tuple(sorted(filters.items())), usagetype)
-        if key not in self._cache:
-            self._cache[key] = self._fetch_price(service_code, filters, usagetype)
-        return self._cache[key]
+        with self._lock:
+            if key not in self._cache:
+                self._cache[key] = self._fetch_price(service_code, filters, usagetype)
+            return self._cache[key]
 
     def _fetch_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None

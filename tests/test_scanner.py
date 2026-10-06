@@ -75,7 +75,9 @@ def test_scan_regions_covers_each_region(fixed_prices: None, capsys: pytest.Capt
     findings = scanner.scan_regions(session, ["ap-southeast-1", "ap-southeast-2"])
 
     assert sorted(f.region for f in findings) == ["ap-southeast-1", "ap-southeast-2"]
-    assert "Scanning ap-southeast-2 (2/2)..." in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "Scanned ap-southeast-1" in err
+    assert "Scanned ap-southeast-2" in err
 
 
 @mock_aws
@@ -95,3 +97,46 @@ def test_scan_regions_shares_one_price_cache(monkeypatch: pytest.MonkeyPatch) ->
     scanner.scan_regions(session, [REGION])
 
     assert calls == ["Asia Pacific (Singapore)"]  # 3 volumes, 1 price lookup
+
+
+@mock_aws
+def test_scan_regions_keeps_region_order(fixed_prices: None) -> None:
+    session = boto3.Session()
+    regions = ["ap-southeast-2", "ap-southeast-1", "eu-west-1", "us-east-1"]
+    for region in regions:
+        session.client("ec2", region_name=region).create_volume(
+            AvailabilityZone=f"{region}a", Size=10
+        )
+
+    findings = scanner.scan_regions(session, regions)
+
+    assert [f.region for f in findings] == regions
+
+
+@mock_aws
+def test_parallel_scan_looks_up_each_price_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def counting_fetch(self, service, filters, usagetype):
+        calls.append(filters["location"])
+        return 0.10
+
+    monkeypatch.setattr(PricingClient, "_fetch_price", counting_fetch)
+    session = boto3.Session()
+    regions = ["ap-southeast-1", "ap-southeast-2"]
+    for region in regions:
+        ec2 = session.client("ec2", region_name=region)
+        for _ in range(3):
+            ec2.create_volume(AvailabilityZone=f"{region}a", Size=10, VolumeType="gp3")
+
+    scanner.scan_regions(session, regions)
+
+    assert sorted(calls) == ["Asia Pacific (Singapore)", "Asia Pacific (Sydney)"]
+
+
+def test_thread_safe_session_passes_through() -> None:
+    session = boto3.Session(region_name="ap-southeast-1")
+    shared = scanner.ThreadSafeSession(session)
+
+    assert shared.region_name == "ap-southeast-1"
+    assert shared.client("ec2").meta.region_name == "ap-southeast-1"

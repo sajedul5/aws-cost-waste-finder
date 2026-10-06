@@ -27,4 +27,4 @@ Short log of design decisions. Newest at the bottom.
 | 21 | Usagetype match is exact after a `[A-Z0-9]+-` prefix, not "ends with" | "Ends with LoadBalancerUsage" also matched Trust Store and Outposts products. |
 | 22 | Cost Explorer allowed only in `cwf bill` / `cwf dashboard` (steps 10–11), opt-in | Owner wants a 3-month bill trend; free CloudWatch billing metrics were empty in their account. ~$0.01 per call, call count printed. |
 | 23 | Stopped time comes from `StateTransitionReason`; unreadable = skipped | It's the only Describe field with the stop time; guessing would give wrong ages. |
-| 24 | `--all-regions` scans only enabled regions, sequentially, with one shared price cache | Opt-in regions that aren't enabled would fail; sequential keeps the code simple (17 regions ≈ 2 min). |
+| 24 | `--all-regions` scans only enabled regions, 8 in parallel (threads), with one shared, locked price cache | Opt-in regions that aren't enabled would fail. The work is waiting on AWS: 17 regions went from 2 min 10 s to 20 s. boto3 Sessions aren't thread-safe, so only client creation is locked (`ThreadSafeSession`). |
