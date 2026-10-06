@@ -14,7 +14,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
 | `models.py` | `Finding` dataclass: check id, resource ID, region, reason, details, monthly cost. |
-| `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. `apply_costs()` fills `monthly_cost` via a check-id → cost-function map; unknown prices stay `None`. |
+| `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. Lookups: EBS storage, gp3 IOPS, snapshot storage (standard/archive), idle public IPv4 (AmazonVPC). `apply_costs()` fills `monthly_cost` (the monthly saving) via a check-id → cost-function map; unknown prices stay `None`. |
 | `report.py` | `render_markdown()`: region + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. Later CSV/JSON/HTML. |
 
 ## Data flow

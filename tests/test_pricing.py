@@ -36,7 +36,7 @@ def ebs_request(volume_type: str) -> dict:
             {"Type": "TERM_MATCH", "Field": "volumeApiName", "Value": volume_type},
             {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
         ],
-        "MaxResults": 10,
+        "MaxResults": 100,
     }
 
 
@@ -108,3 +108,99 @@ def test_unknown_check_is_left_alone(pricing: PricingClient) -> None:
     finding = Finding(check="something-else", resource_id="x", region=REGION, reason="test")
     apply_costs([finding], pricing)
     assert finding.monthly_cost is None
+
+
+def priced_item(usagetype: str, usd: str) -> str:
+    item = json.loads(price_item(usd))
+    item["product"]["attributes"]["usagetype"] = usagetype
+    return json.dumps(item)
+
+
+def snapshot_request() -> dict:
+    return {
+        "ServiceCode": "AmazonEC2",
+        "Filters": [
+            {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "Storage Snapshot"},
+            {"Type": "TERM_MATCH", "Field": "storageMedia", "Value": "Amazon S3"},
+            {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
+        ],
+        "MaxResults": 100,
+    }
+
+
+def test_snapshot_price_picks_matching_usagetype(pricing: PricingClient) -> None:
+    products = [
+        priced_item("APS1-EBS:SnapshotArchiveStorage", "0.0125"),
+        priced_item("APS1-EBS:SnapshotUsage.outposts", "0.027"),
+        priced_item("APS1-EBS:SnapshotUsage", "0.05"),
+    ]
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": products}, snapshot_request())
+        stub.add_response("get_products", {"PriceList": products}, snapshot_request())
+        assert pricing.snapshot_price(REGION) == pytest.approx(0.05)
+        assert pricing.snapshot_price(REGION, archive=True) == pytest.approx(0.0125)
+
+
+def test_idle_ipv4_price(pricing: PricingClient) -> None:
+    request = {
+        "ServiceCode": "AmazonVPC",
+        "Filters": [
+            {"Type": "TERM_MATCH", "Field": "group", "Value": "VPCPublicIPv4Address"},
+            {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
+        ],
+        "MaxResults": 100,
+    }
+    products = [
+        priced_item("APS1-PublicIPv4:InUseAddress", "0.006"),
+        priced_item("APS1-PublicIPv4:IdleAddress", "0.005"),
+    ]
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": products}, request)
+        assert pricing.idle_ipv4_hourly_price(REGION) == pytest.approx(0.005)
+
+
+@pytest.fixture
+def singapore_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Real Singapore prices (Oct 2026) without API calls."""
+    storage = {"gp2": 0.12, "gp3": 0.096}
+    monkeypatch.setattr(PricingClient, "ebs_storage_price", lambda self, r, t: storage[t])
+    monkeypatch.setattr(PricingClient, "gp3_iops_price", lambda self, r: 0.006)
+    monkeypatch.setattr(
+        PricingClient, "snapshot_price", lambda self, r, archive=False: 0.0125 if archive else 0.05
+    )
+    monkeypatch.setattr(PricingClient, "idle_ipv4_hourly_price", lambda self, r: 0.005)
+
+
+def finding_for(check: str, **details) -> Finding:
+    return Finding(check=check, resource_id="x", region=REGION, reason="test", details=details)
+
+
+@pytest.mark.parametrize(
+    ("size", "expected"),
+    [
+        (100, 2.40),  # 300 IOPS baseline: below gp3's free 3,000
+        (1000, 24.00),  # exactly 3,000 IOPS
+        (2000, 30.00),  # 48.00 storage saving - 3,000 extra IOPS * 0.006
+        (6000, 66.00),  # gp2 capped at 16,000 IOPS: 144.00 - 13,000 * 0.006
+    ],
+)
+def test_gp2_to_gp3_savings(
+    pricing: PricingClient, singapore_prices: None, size: int, expected: float
+) -> None:
+    finding = finding_for("gp2-to-gp3", size_gib=size)
+    apply_costs([finding], pricing)
+    assert finding.monthly_cost == pytest.approx(expected)
+
+
+def test_old_snapshot_cost(pricing: PricingClient, singapore_prices: None) -> None:
+    standard = finding_for("old-snapshot", size_gib=100, archive=False)
+    archived = finding_for("old-snapshot", size_gib=100, archive=True)
+    apply_costs([standard, archived], pricing)
+    assert standard.monthly_cost == 5.0
+    assert archived.monthly_cost == 1.25
+
+
+def test_unattached_eip_cost(pricing: PricingClient, singapore_prices: None) -> None:
+    finding = finding_for("unattached-eip")
+    apply_costs([finding], pricing)
+    assert finding.monthly_cost == 3.65

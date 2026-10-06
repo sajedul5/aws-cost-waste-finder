@@ -42,7 +42,7 @@ def test_failing_check_is_skipped(
 def test_pricing_failure_leaves_costs_unknown(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
 ) -> None:
-    def denied(self, service, filters):
+    def denied(self, service, filters, usagetype_suffix=None):
         raise ClientError({"Error": {"Code": "AccessDenied", "Message": "no"}}, "GetProducts")
 
     monkeypatch.setattr(PricingClient, "get_price", denied)
