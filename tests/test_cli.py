@@ -63,3 +63,38 @@ def test_scan_with_bad_profile_fails_clearly(monkeypatch: pytest.MonkeyPatch) ->
     assert result.exit_code != 0
     assert "AWS credentials problem" in result.output
     assert "Traceback" not in result.output
+
+
+def test_scan_help_lists_threshold_options() -> None:
+    result = CliRunner().invoke(cli, ["scan", "--help"])
+    for option in (
+        "--lookback-days",
+        "--cpu-threshold",
+        "--network-threshold-mb",
+        "--nat-threshold-gb",
+        "--lb-requests-threshold",
+        "--snapshot-age-days",
+    ):
+        assert option in result.output
+
+
+def test_scan_passes_thresholds(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen = {}
+
+    def fake_scan(session, region, thresholds):
+        seen["thresholds"] = thresholds
+        return []
+
+    monkeypatch.setattr("cost_waste_finder.cli.run_scan", fake_scan)
+    args = ["scan", "--region", REGION, "--cpu-threshold", "10", "--lookback-days", "7"]
+    result = CliRunner().invoke(cli, args)
+
+    assert result.exit_code == 0, result.output
+    assert seen["thresholds"].cpu_percent == 10
+    assert seen["thresholds"].lookback_days == 7
+    assert seen["thresholds"].snapshot_age_days == 90  # default kept
+
+
+def test_scan_rejects_zero_lookback() -> None:
+    result = CliRunner().invoke(cli, ["scan", "--region", REGION, "--lookback-days", "0"])
+    assert result.exit_code != 0

@@ -2,6 +2,7 @@ import boto3
 from moto import mock_aws
 
 from cost_waste_finder.checks import CHECKS, unattached_ebs
+from cost_waste_finder.config import Thresholds
 
 REGION = "ap-southeast-1"
 AZ = f"{REGION}a"
@@ -23,7 +24,7 @@ def test_finds_only_unattached_volume() -> None:
     ec2.attach_volume(VolumeId=attached, InstanceId=instance_id, Device="/dev/sdf")
     unattached = ec2.create_volume(AvailabilityZone=AZ, Size=100, VolumeType="gp2")["VolumeId"]
 
-    findings = unattached_ebs.check(session, REGION)
+    findings = unattached_ebs.check(session, REGION, Thresholds())
 
     assert [f.resource_id for f in findings] == [unattached]
     finding = findings[0]
@@ -37,7 +38,7 @@ def test_finds_only_unattached_volume() -> None:
 
 @mock_aws
 def test_empty_account_has_no_findings() -> None:
-    assert unattached_ebs.check(make_session(), REGION) == []
+    assert unattached_ebs.check(make_session(), REGION, Thresholds()) == []
 
 
 @mock_aws
@@ -45,7 +46,7 @@ def test_only_scans_given_region() -> None:
     other = boto3.Session(region_name="us-east-1").client("ec2")
     other.create_volume(AvailabilityZone="us-east-1a", Size=10)
 
-    assert unattached_ebs.check(make_session(), REGION) == []
+    assert unattached_ebs.check(make_session(), REGION, Thresholds()) == []
 
 
 @mock_aws
@@ -54,7 +55,7 @@ def test_finds_many_volumes() -> None:
     ec2 = session.client("ec2")
     created = {ec2.create_volume(AvailabilityZone=AZ, Size=1)["VolumeId"] for _ in range(10)}
 
-    findings = unattached_ebs.check(session, REGION)
+    findings = unattached_ebs.check(session, REGION, Thresholds())
 
     assert {f.resource_id for f in findings} == created
 

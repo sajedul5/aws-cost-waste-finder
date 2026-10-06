@@ -6,19 +6,24 @@ import boto3
 from botocore.exceptions import ClientError
 
 from cost_waste_finder.checks import CHECKS
+from cost_waste_finder.config import Thresholds
 from cost_waste_finder.models import Finding
 from cost_waste_finder.pricing import PricingClient, apply_costs
 
 
 def scan(
-    session: boto3.Session, region: str, pricing: PricingClient | None = None
+    session: boto3.Session,
+    region: str,
+    thresholds: Thresholds | None = None,
+    pricing: PricingClient | None = None,
 ) -> list[Finding]:
     """Run all checks in a region. Failing checks (e.g. AccessDenied) are skipped with a warning."""
+    thresholds = thresholds or Thresholds()
     findings: list[Finding] = []
     for check in CHECKS:
         name = check.__module__.rsplit(".", 1)[-1]
         try:
-            findings.extend(check(session, region))
+            findings.extend(check(session, region, thresholds))
         except ClientError as error:
             warn(f"check {name} skipped in {region}: {error.response['Error']['Code']}")
 

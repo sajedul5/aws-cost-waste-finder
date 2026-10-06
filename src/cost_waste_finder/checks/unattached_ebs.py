@@ -2,12 +2,13 @@
 
 import boto3
 
+from cost_waste_finder.config import Thresholds
 from cost_waste_finder.models import Finding
 
 CHECK_ID = "unattached-ebs"
 
 
-def check(session: boto3.Session, region: str) -> list[Finding]:
+def check(session: boto3.Session, region: str, thresholds: Thresholds) -> list[Finding]:
     ec2 = session.client("ec2", region_name=region)
     paginator = ec2.get_paginator("describe_volumes")
     pages = paginator.paginate(Filters=[{"Name": "status", "Values": ["available"]}])

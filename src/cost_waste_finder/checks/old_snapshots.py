@@ -4,6 +4,7 @@ from datetime import UTC, datetime, timedelta
 
 import boto3
 
+from cost_waste_finder.config import Thresholds
 from cost_waste_finder.models import Finding
 
 CHECK_ID = "old-snapshot"
@@ -13,12 +14,12 @@ BYTES_PER_GIB = 1024**3
 def check(
     session: boto3.Session,
     region: str,
-    min_age_days: int = 90,
+    thresholds: Thresholds,
     now: datetime | None = None,
 ) -> list[Finding]:
     ec2 = session.client("ec2", region_name=region)
     now = now or datetime.now(UTC)
-    cutoff = now - timedelta(days=min_age_days)
+    cutoff = now - timedelta(days=thresholds.snapshot_age_days)
     used_by_ami = _snapshots_used_by_own_amis(ec2)
 
     findings = []
