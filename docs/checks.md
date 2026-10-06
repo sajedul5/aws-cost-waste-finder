@@ -5,7 +5,7 @@ where noted. Keep this table current (see the `add-check` skill).
 
 | Check | Finds | Logic | Thresholds | IAM permissions | Status |
 |---|---|---|---|---|---|
-| `unattached-ebs` | EBS volumes not attached to any instance | `DescribeVolumes` with `status=available` | none | `ec2:DescribeVolumes` | planned (step 2) |
+| `unattached-ebs` | EBS volumes not attached to any instance | `DescribeVolumes` with `status=available` | none | `ec2:DescribeVolumes` | done (step 2) |
 | `old-snapshot` | Old EBS snapshots no AMI uses | Own snapshots older than N days whose ID isn't in any own AMI's block device mappings | 90 days | `ec2:DescribeSnapshots`, `ec2:DescribeImages` | planned (step 5) |
 | `unattached-eip` | Elastic IPs not associated | `DescribeAddresses` with no `AssociationId` | none | `ec2:DescribeAddresses` | planned (step 5) |
 | `gp2-to-gp3` | gp2 volumes that could be gp3 (~20% cheaper) | `DescribeVolumes` with `volume-type=gp2` | none | `ec2:DescribeVolumes` | planned (step 5) |

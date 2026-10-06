@@ -24,7 +24,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 ## Plan
 - [x] 0. Claude Code setup: CLAUDE.md, .claude/settings.json, skills, docs/
 - [x] 1. Setup: src/ package `cost_waste_finder`, pyproject.toml, minimal `cwf` CLI, GitHub Actions CI (ruff + pytest)
-- [ ] 2. Check: unattached EBS volumes
+- [x] 2. Check: unattached EBS volumes
 - [ ] 3. Pricing API client (us-east-1, location filter, in-memory cache); findings get monthly cost
 - [ ] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
 - [ ] 5. Checks: old snapshots (>90d, not used by AMI), unattached EIPs, gp2 -> gp3
