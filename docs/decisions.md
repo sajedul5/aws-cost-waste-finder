@@ -12,3 +12,5 @@ Short log of design decisions. Newest at the bottom.
 | 6 | Pricing API in `us-east-1`, filtered by location name | The Pricing API is only served from a few regions; prices are per location. |
 | 7 | moto for all tests; CI never calls real AWS | Fast, free, deterministic, and no credentials in CI. |
 | 8 | Owner does all git commits, pushes and PRs | Enforced via `.claude/settings.json` deny rules. |
+| 9 | Optional local `.env` (gitignored), loaded by `cwf` without overriding the shell | Convenience for local runs. Prefer `AWS_PROFILE`/SSO; if keys, only a read-only IAM user. Claude is denied reading `.env`. |
+| 10 | hatchling build, src/ layout, CI on Python 3.11 and 3.13 | Simple packaging; src/ layout makes tests use the installed package. Covers the minimum and a current Python. |

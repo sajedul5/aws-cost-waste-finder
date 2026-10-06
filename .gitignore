@@ -3,6 +3,9 @@ CLAUDE.local.md
 .claude/settings.local.json
 reports/
 *.local.*
+.env
+.env.*
+!.env.example
 
 # Python
 .venv/
