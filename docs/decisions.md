@@ -14,3 +14,6 @@ Short log of design decisions. Newest at the bottom.
 | 8 | Owner does all git commits, pushes and PRs | Enforced via `.claude/settings.json` deny rules. |
 | 9 | Optional local `.env` (gitignored), loaded by `cwf` without overriding the shell | Convenience for local runs. Prefer `AWS_PROFILE`/SSO; if keys, only a read-only IAM user. Claude is denied reading `.env`. |
 | 10 | hatchling build, src/ layout, CI on Python 3.11 and 3.13 | Simple packaging; src/ layout makes tests use the installed package. Covers the minimum and a current Python. |
+| 11 | Region → Pricing location name from botocore's bundled endpoint data | No extra API call, no hand-maintained table; covers every region botocore knows. |
+| 12 | EBS cost = storage GB-month only (no extra IOPS/throughput yet) | Simple first version; errs on the side of under-estimating savings. |
+| 13 | Pricing tests use botocore `Stubber`, not moto | moto doesn't implement the Pricing API; Stubber is offline too. |

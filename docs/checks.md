@@ -14,4 +14,5 @@ where noted. Keep this table current (see the `add-check` skill).
 | `idle-load-balancer` | ALB/NLB/CLB with no targets or near-zero requests | No registered/healthy targets, or request count below threshold | 14 days | `elasticloadbalancing:Describe*`, `cloudwatch:GetMetricStatistics` | planned (step 6) |
 | `stopped-ec2` | Instances stopped a long time that still pay for volumes | State `stopped`, transition time older than N days, has EBS volumes | 30 days | `ec2:DescribeInstances`, `ec2:DescribeVolumes` | planned (step 7) |
 
-Pricing for all checks uses `pricing:GetProducts` (called in `us-east-1`).
+Pricing for all checks uses `pricing:GetProducts` (called in `us-east-1`), on-demand USD.
+EBS costs are storage GB-month only; extra provisioned IOPS/throughput (io1/io2, gp3 above baseline) are not included yet.
