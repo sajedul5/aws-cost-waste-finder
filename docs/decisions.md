@@ -19,3 +19,6 @@ Short log of design decisions. Newest at the bottom.
 | 13 | Pricing tests use botocore `Stubber`, not moto | moto doesn't implement the Pricing API; Stubber is offline too. |
 | 14 | A failing check or pricing call warns and continues | One missing IAM permission shouldn't hide every other finding. |
 | 15 | Report goes to stdout only (no files) until `--output` in step 9 | Avoids writing real account data to disk by accident. |
+| 16 | Snapshot cost uses full snapshot size: shown as "up to" | AWS doesn't expose the billed incremental size via Describe calls; an upper bound is honest. |
+| 17 | gp2→gp3 saving subtracts gp3 IOPS needed to match gp2 baseline; only in-use volumes | Avoids overstating savings on large volumes and double counting unattached volumes. |
+| 18 | `get_price` can match a usagetype suffix | Usagetypes start with a region code (`APS1-...`), so exact TERM_MATCH filters can't select them. |

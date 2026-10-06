@@ -17,4 +17,6 @@ def fixed_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     """moto has no Pricing API: every price lookup returns $0.10."""
     from cost_waste_finder.pricing import PricingClient
 
-    monkeypatch.setattr(PricingClient, "get_price", lambda self, service, filters: 0.10)
+    monkeypatch.setattr(
+        PricingClient, "get_price", lambda self, service, filters, usagetype_suffix=None: 0.10
+    )
