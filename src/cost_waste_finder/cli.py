@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from cost_waste_finder import __version__
 from cost_waste_finder.config import Thresholds
 from cost_waste_finder.report import render_markdown
-from cost_waste_finder.scanner import scan as run_scan
+from cost_waste_finder.scanner import enabled_regions, scan_regions
 
 
 def resolve_region(session: boto3.Session, region: str | None) -> str:
@@ -33,6 +33,7 @@ DEFAULTS = Thresholds()
 
 @cli.command()
 @click.option("--region", help="AWS region to scan. Defaults to your AWS config region.")
+@click.option("--all-regions", is_flag=True, help="Scan every region enabled for the account.")
 @click.option(
     "--lookback-days",
     type=click.IntRange(min=1),
@@ -75,14 +76,23 @@ DEFAULTS = Thresholds()
     show_default=True,
     help="Old snapshot: older than this many days.",
 )
+@click.option(
+    "--stopped-days",
+    type=click.IntRange(min=1),
+    default=DEFAULTS.stopped_days,
+    show_default=True,
+    help="Stopped EC2: stopped longer than this many days.",
+)
 def scan(
     region: str | None,
+    all_regions: bool,
     lookback_days: int,
     cpu_threshold: float,
     network_threshold_mb: float,
     nat_threshold_gb: float,
     lb_requests_threshold: int,
     snapshot_age_days: int,
+    stopped_days: int,
 ) -> None:
     """Scan an AWS account for wasted spend and print a Markdown report."""
     thresholds = Thresholds(
@@ -92,15 +102,22 @@ def scan(
         nat_gb=nat_threshold_gb,
         lb_requests=lb_requests_threshold,
         snapshot_age_days=snapshot_age_days,
+        stopped_days=stopped_days,
     )
+    if region and all_regions:
+        raise click.UsageError("Use either --region or --all-regions, not both.")
     try:
         session = boto3.Session()
-        region = resolve_region(session, region)
-        findings = run_scan(session, region, thresholds)
+        if all_regions:
+            # DescribeRegions works from any region; prefer the configured one.
+            regions = enabled_regions(session, session.region_name or "us-east-1")
+        else:
+            regions = [resolve_region(session, region)]
+        findings = scan_regions(session, regions, thresholds)
     except BotoCoreError as error:
         # e.g. no credentials, unknown profile, expired SSO token
         raise click.ClickException(f"AWS credentials problem: {error}") from error
-    click.echo(render_markdown(findings, region), nl=False)
+    click.echo(render_markdown(findings, regions), nl=False)
 
 
 def main() -> None:

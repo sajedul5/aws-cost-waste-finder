@@ -11,3 +11,4 @@ class Thresholds:
     nat_gb: float = 1.0  # idle NAT Gateway: total GB sent over the lookback
     lb_requests: int = 100  # idle load balancer: total requests/new flows over the lookback
     snapshot_age_days: int = 90  # old snapshot: older than this
+    stopped_days: int = 30  # stopped EC2: stopped longer than this

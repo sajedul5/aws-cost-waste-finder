@@ -27,7 +27,7 @@ def test_total_ignores_unpriced() -> None:
 
 
 def test_report_has_summary_table_and_total() -> None:
-    report = render_markdown([finding("vol-small", 1.92), finding("vol-big", 9.6)], REGION, DAY)
+    report = render_markdown([finding("vol-small", 1.92), finding("vol-big", 9.6)], [REGION], DAY)
 
     assert "Region: ap-southeast-1 · Scanned: 2026-01-15" in report
     assert "**You can save ~$11.52/month** (2 findings)" in report
@@ -37,24 +37,29 @@ def test_report_has_summary_table_and_total() -> None:
 
 
 def test_report_marks_unpriced() -> None:
-    report = render_markdown([finding("vol-a", None)], REGION, DAY)
+    report = render_markdown([finding("vol-a", None)], [REGION], DAY)
 
     assert "| n/a |" in report
     assert "1 finding(s) have no price" in report
 
 
 def test_empty_report() -> None:
-    report = render_markdown([], REGION, DAY)
+    report = render_markdown([], [REGION], DAY)
 
     assert "No waste found." in report
     assert "|" not in report
 
 
 def test_pipes_are_escaped() -> None:
-    report = render_markdown([finding("vol-a", 1.0, reason="a | b")], REGION, DAY)
+    report = render_markdown([finding("vol-a", 1.0, reason="a | b")], [REGION], DAY)
     assert "a \\| b" in report
 
 
 def test_large_numbers_use_thousands_separator() -> None:
-    report = render_markdown([finding("vol-a", 12345.6)], REGION, DAY)
+    report = render_markdown([finding("vol-a", 12345.6)], [REGION], DAY)
     assert "~$12,345.60/month" in report
+
+
+def test_multi_region_header() -> None:
+    report = render_markdown([], ["ap-southeast-1", "ap-southeast-2"], DAY)
+    assert "Regions (2): ap-southeast-1, ap-southeast-2 · Scanned: 2026-01-15" in report

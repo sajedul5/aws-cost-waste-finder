@@ -30,7 +30,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 4. Report + CLI: `cwf scan [--region]`, Markdown table sorted by savings, plus total
 - [x] 5. Checks: old snapshots (>90d, not used by AMI), unattached EIPs, gp2 -> gp3
 - [x] 6. CloudWatch checks (14d, configurable thresholds): idle EC2, idle NAT GW, idle LBs
-- [ ] 7. Stopped EC2 >30d with volumes; `--all-regions`
+- [x] 7. Stopped EC2 >30d with volumes; `--all-regions`
 - [ ] 8. `--role-arn` and iam/read-only-policy.json
 - [ ] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
 - [ ] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down

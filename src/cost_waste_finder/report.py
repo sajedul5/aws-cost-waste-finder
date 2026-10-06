@@ -14,12 +14,14 @@ def total_savings(findings: list[Finding]) -> float:
     return round(sum(f.monthly_cost or 0 for f in findings), 2)
 
 
-def render_markdown(findings: list[Finding], region: str, scanned_on: date | None = None) -> str:
+def render_markdown(
+    findings: list[Finding], regions: list[str], scanned_on: date | None = None
+) -> str:
     scanned_on = scanned_on or date.today()
     lines = [
         "# AWS cost waste report",
         "",
-        f"Region: {region} · Scanned: {scanned_on.isoformat()}",
+        f"{regions_label(regions)} · Scanned: {scanned_on.isoformat()}",
         "",
     ]
     if not findings:
@@ -42,6 +44,12 @@ def render_markdown(findings: list[Finding], region: str, scanned_on: date | Non
     if unpriced:
         lines += ["", f"{unpriced} finding(s) have no price (n/a) and are not in the total."]
     return "\n".join(lines) + "\n"
+
+
+def regions_label(regions: list[str]) -> str:
+    if len(regions) == 1:
+        return f"Region: {regions[0]}"
+    return f"Regions ({len(regions)}): {', '.join(regions)}"
 
 
 def plural(count: int, word: str) -> str:

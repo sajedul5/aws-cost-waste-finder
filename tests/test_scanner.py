@@ -53,3 +53,45 @@ def test_pricing_failure_leaves_costs_unknown(
 
     assert findings[0].monthly_cost is None
     assert "pricing unavailable" in capsys.readouterr().err
+
+
+@mock_aws
+def test_enabled_regions() -> None:
+    regions = scanner.enabled_regions(boto3.Session(), "us-east-1")
+
+    assert "ap-southeast-1" in regions
+    assert "ap-southeast-2" in regions
+    assert regions == sorted(regions)
+
+
+@mock_aws
+def test_scan_regions_covers_each_region(fixed_prices: None, capsys: pytest.CaptureFixture) -> None:
+    session = boto3.Session()
+    for region in ("ap-southeast-1", "ap-southeast-2"):
+        session.client("ec2", region_name=region).create_volume(
+            AvailabilityZone=f"{region}a", Size=10
+        )
+
+    findings = scanner.scan_regions(session, ["ap-southeast-1", "ap-southeast-2"])
+
+    assert sorted(f.region for f in findings) == ["ap-southeast-1", "ap-southeast-2"]
+    assert "Scanning ap-southeast-2 (2/2)..." in capsys.readouterr().err
+
+
+@mock_aws
+def test_scan_regions_shares_one_price_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def counting_fetch(self, service, filters, usagetype):
+        calls.append(filters["location"])
+        return 0.10
+
+    monkeypatch.setattr(PricingClient, "_fetch_price", counting_fetch)
+    session = boto3.Session()
+    ec2 = session.client("ec2", region_name=REGION)
+    for _ in range(3):
+        ec2.create_volume(AvailabilityZone=f"{REGION}a", Size=10, VolumeType="gp3")
+
+    scanner.scan_regions(session, [REGION])
+
+    assert calls == ["Asia Pacific (Singapore)"]  # 3 volumes, 1 price lookup

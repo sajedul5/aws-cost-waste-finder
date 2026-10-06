@@ -221,6 +221,17 @@ def _idle_load_balancer_cost(finding: Finding, pricing: PricingClient) -> float 
     return None if price is None else round(price * HOURS_PER_MONTH, 2)
 
 
+def _stopped_ec2_cost(finding: Finding, pricing: PricingClient) -> float | None:
+    """Storage of every volume still attached to the stopped instance."""
+    total = 0.0
+    for volume in finding.details["volumes"]:
+        price = pricing.ebs_storage_price(finding.region, volume["volume_type"])
+        if price is None:
+            return None
+        total += volume["size_gib"] * price
+    return round(total, 2)
+
+
 COST_FUNCTIONS: dict[str, Callable[[Finding, PricingClient], float | None]] = {
     "unattached-ebs": _unattached_ebs_cost,
     "old-snapshot": _old_snapshot_cost,
@@ -229,6 +240,7 @@ COST_FUNCTIONS: dict[str, Callable[[Finding, PricingClient], float | None]] = {
     "idle-ec2": _idle_ec2_cost,
     "idle-nat-gateway": _idle_nat_gateway_cost,
     "idle-load-balancer": _idle_load_balancer_cost,
+    "stopped-ec2": _stopped_ec2_cost,
 }
 
 
