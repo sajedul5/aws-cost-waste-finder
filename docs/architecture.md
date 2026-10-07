@@ -11,6 +11,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | Component | Responsibility |
 |---|---|
 | `cli.py` | Click entry point `cwf`. Loads optional `.env`, builds the session, resolves `--region` (else config default), runs the scanner, prints the report. Credential errors become a clear message. Later: `--all-regions`, `--role-arn`, `--format`, `--output`. |
+| `session.py` | `make_session()`: default credential chain, or `sts:AssumeRole` into a client's read-only role (`--role-arn`, optional `--external-id`, 1 hour). |
 | `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. `scan_regions()` loops over regions; `enabled_regions()` lists the account's enabled regions. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region, thresholds)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
 | `config.py` | `Thresholds` dataclass: lookback days and per-check limits; every value is a `cwf scan` option. |
@@ -33,6 +34,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 
 ## Boundaries
 
-- Runs locally only; credentials come from the user's environment.
+- Runs locally only; credentials come from the user's environment, or an assumed client role.
+- Minimum IAM permissions: `iam/read-only-policy.json` (see `docs/iam.md`); a test checks it covers every call.
 - No writes to AWS, no Cost Explorer, no data leaves the machine except AWS API calls.
 - Tests use moto; CI never has AWS credentials.

@@ -42,8 +42,8 @@ def _idle_finding(
 
     # History comes from CloudWatch, not LaunchTime: LaunchTime resets on every stop/start.
     cpu_days = daily_values(cloudwatch, "AWS/EC2", "CPUUtilization", dims, "Average", days, now)
-    if len(cpu_days) < days - MISSING_DAYS_ALLOWED:
-        return None  # not enough history yet
+    if not cpu_days or len(cpu_days) < days - MISSING_DAYS_ALLOWED:
+        return None  # no data, or not enough history yet
     cpu = average(cpu_days)
     if cpu >= thresholds.cpu_percent:
         return None
