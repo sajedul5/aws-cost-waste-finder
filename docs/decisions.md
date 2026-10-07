@@ -35,3 +35,5 @@ Short log of design decisions. Newest at the bottom.
 | 29 | Docker image runs as non-root; credentials are mounted, never built in | `.dockerignore` excludes `.env`, `reports/`, `.git`; CI builds the image on every PR. |
 | 30 | Bill trend: 2 full months + current month so far with AWS forecast; per-service current month uses a simple projection | Fair comparison (a half month always looks lower). One forecast call for the total keeps the cost at ~2 calls (~$0.02); a forecast per service would cost one call each. |
 | 31 | Cost Explorer permissions are a separate `CwfBillOptional` statement | A client can allow the waste scan without sharing bill data. |
+| 32 | Dashboard scans all enabled regions by default and includes the bill unless `--no-bill` | It's the whole-account view for decisions; `--no-bill` keeps it free. |
+| 33 | Dashboard charts are inline SVG / CSS bars generated in Python, no chart library | One file that works offline and is safe to email; no CDN or JavaScript. |
