@@ -30,3 +30,6 @@ Short log of design decisions. Newest at the bottom.
 | 24 | `--all-regions` scans only enabled regions, 8 in parallel (threads), with one shared, locked price cache | Opt-in regions that aren't enabled would fail. The work is waiting on AWS: 17 regions went from 2 min 10 s to 20 s. boto3 Sessions aren't thread-safe, so only client creation is locked (`ThreadSafeSession`). |
 | 25 | Client access via `sts:AssumeRole` into a read-only role, with an optional external ID | No shared keys; the client controls and can delete the role; external ID prevents confused-deputy misuse. |
 | 26 | A test records every AWS call in a full moto scan and checks it against the IAM policy | The policy can't silently fall behind the code; also asserts the policy is Describe/Get/List only. |
+| 27 | HTML report is one self-contained file: inline CSS, no JavaScript, no external links | Safe to email or attach for a client; works offline; nothing to load or track. |
+| 28 | CSV cells starting with `= + - @` get a leading `'` | Prevents formula injection when a client opens the CSV in Excel/Sheets (resource names come from their account). |
+| 29 | Docker image runs as non-root; credentials are mounted, never built in | `.dockerignore` excludes `.env`, `reports/`, `.git`; CI builds the image on every PR. |
