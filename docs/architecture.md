@@ -10,7 +10,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 
 | Component | Responsibility |
 |---|---|
-| `cli.py` | Command `scan`. Shared `ROLE_OPTIONS` and `@threshold_options`; `open_session()`, `run_scan()` and `emit()` keep commands short. |
+| `cli.py` | Commands `scan` and `web`. Shared `ROLE_OPTIONS` and `@threshold_options`; `open_session()`, `run_scan()` and `emit()` keep commands short. |
 | `session.py` | `make_session()`: default credential chain, or `sts:AssumeRole` into a client's read-only role (`--role-arn`, optional `--external-id`, 1 hour). |
 | `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. `scan_regions()` loops over regions; `enabled_regions()` lists the account's enabled regions. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region, thresholds)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
@@ -19,7 +19,10 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | `models.py` | `Finding` dataclass: check id, resource ID, region, reason, details, monthly cost. |
 | `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. Lookups: EBS storage, gp3 IOPS, snapshot storage (standard/archive), idle public IPv4 (AmazonVPC), EC2 instance (Linux/Windows), NAT Gateway, load balancer (AWSELB). Products can be picked by usagetype without its region prefix. `apply_costs()` fills `monthly_cost` (the monthly saving) via a check-id → cost-function map; unknown prices stay `None`. |
 | `report.py` | `render_markdown()`: region(s) + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. `render_csv()` (data rows only, formula-injection safe) and `render_json()` (with `details`). |
-| `html_report.py` | `render_html()`: one self-contained page, inline CSS (light/dark), all text escaped, no scripts or external links. `CSS` is reused by the web page. |
+| `html_report.py` | `render_html()`: one self-contained page, inline CSS (light/dark), all text escaped, no scripts or external links. `page()` and `report_body()` are reused by the web page. |
+| `branding.py` | Optional "Prepared by" details (name, title, email, LinkedIn) from `CWF_*` environment variables, so they stay in the user's own `.env`, not the public repo. |
+| `pdf_report.py` | `render_pdf()`: client PDF with fpdf2 (pure Python): title "<Company> - AWS Cost Waste Report", AWS-console-like navy bar with orange line, title and scan time, a blue "Prepared by" note (clickable email and "LinkedIn" links, URL not shown), "Summary" box and plain findings table, savings per month and year, findings table, total, page footer. Built-in fonts, so non-Latin characters become `?`. |
+| `web.py` | `cwf web`: standard-library HTTP server. `/` page "AWS Cost Waste Audit" with the branding card, company name + Scan, and the latest report; `POST /scan` scans all enabled regions (one at a time); `/report.pdf` download. Only localhost host names are accepted and cross-site posts are refused. |
 | `output.py` | `RENDERERS` for `--format markdown|csv|json|html`; `write_report()` for `--output FILE`. |
 
 ## Data flow
