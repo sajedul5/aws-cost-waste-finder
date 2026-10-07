@@ -36,7 +36,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 10. `cwf bill` (Cost Explorer): removed again in step 11
 - [x] 11. Waste audit only: remove `cwf bill` and `cwf dashboard`; no Cost Explorer
 - [x] 12. `cwf web`: local page (organization name + Scan), waste report, Download PDF; Docker
-- [ ] 13. README polish, examples/sample-report.md (fake IDs), architecture diagram
+- [x] 13. README polish, examples/sample-report.md (fake IDs), architecture diagram
 
 ## Commands
 ```sh
