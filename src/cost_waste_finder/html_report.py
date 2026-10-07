@@ -12,7 +12,7 @@ from cost_waste_finder.report import (
     total_savings,
 )
 
-# Shared look for the HTML report (and the step 11 dashboard). Light and dark mode.
+# Look of the HTML report (also used by the web page). Light and dark mode.
 CSS = """
 :root {
   --bg: #f7f7f5; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6b66;

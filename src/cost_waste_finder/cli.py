@@ -9,11 +9,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 
 from cost_waste_finder import __version__
-from cost_waste_finder.billing import COST_PER_CALL_USD, get_bill_summary
-from cost_waste_finder.billing_report import BILL_RENDERERS
 from cost_waste_finder.config import Thresholds
-from cost_waste_finder.dashboard import render_dashboard
-from cost_waste_finder.models import BillSummary
 from cost_waste_finder.output import RENDERERS, render, write_report
 from cost_waste_finder.scanner import enabled_regions, scan_regions
 from cost_waste_finder.session import make_session
@@ -176,55 +172,6 @@ def scan(
     emit(render(findings, regions, fmt), output)
 
 
-@cli.command()
-@add_options(ROLE_OPTIONS)
-@click.option(
-    "--format",
-    "fmt",
-    type=click.Choice(list(BILL_RENDERERS)),
-    default="markdown",
-    show_default=True,
-    help="Report format.",
-)
-@click.option(
-    "--output",
-    type=click.Path(dir_okay=False, path_type=Path),
-    help="Write the report to this file instead of the screen.",
-)
-def bill(role_arn: str | None, external_id: str | None, fmt: str, output: Path | None) -> None:
-    """3-month bill trend per service (Cost Explorer: about $0.01 per API call)."""
-    session = open_session(role_arn, external_id)
-    emit(BILL_RENDERERS[fmt](run_bill(session)), output)
-
-
-@cli.command()
-@click.option(
-    "--output",
-    type=click.Path(dir_okay=False, path_type=Path),
-    required=True,
-    help="HTML file to write, e.g. reports/dashboard.html.",
-)
-@click.option("--title", help='Name shown on the dashboard, e.g. "Client A". No account IDs.')
-@click.option("--region", help="Only this region. Default: every enabled region.")
-@click.option("--no-bill", is_flag=True, help="Skip the bill trend (no Cost Explorer charge).")
-@add_options(ROLE_OPTIONS)
-@threshold_options
-def dashboard(
-    output: Path,
-    title: str | None,
-    region: str | None,
-    no_bill: bool,
-    role_arn: str | None,
-    external_id: str | None,
-    thresholds: Thresholds,
-) -> None:
-    """One HTML page: 3-month bill trend, waste findings and recommended actions."""
-    session = open_session(role_arn, external_id)
-    regions, findings = run_scan(session, region, not region, thresholds)
-    summary = None if no_bill else run_bill(session)
-    emit(render_dashboard(findings, regions, summary, title), output)
-
-
 # --- helpers ---------------------------------------------------------------------------------
 
 
@@ -254,23 +201,6 @@ def run_scan(session: boto3.Session, region: str | None, all_regions: bool, thre
     except BotoCoreError as error:
         # e.g. no credentials, unknown profile, expired SSO token
         raise click.ClickException(f"AWS credentials problem: {error}") from error
-
-
-def run_bill(session: boto3.Session) -> BillSummary:
-    try:
-        summary = get_bill_summary(session)
-    except ClientError as error:
-        details = error.response["Error"]
-        raise click.ClickException(
-            f"Cost Explorer error: {details['Code']}: {details.get('Message', '')}. "
-            "Cost Explorer must be enabled, and you need ce:GetCostAndUsage and "
-            "ce:GetCostForecast (docs/iam.md)."
-        ) from error
-    except BotoCoreError as error:
-        raise click.ClickException(f"AWS credentials problem: {error}") from error
-    calls = summary.api_calls
-    click.echo(f"Cost Explorer calls: {calls} (~${calls * COST_PER_CALL_USD:.2f})", err=True)
-    return summary
 
 
 def emit(text: str, output: Path | None) -> None:

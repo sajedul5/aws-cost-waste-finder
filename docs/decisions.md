@@ -37,3 +37,4 @@ Short log of design decisions. Newest at the bottom.
 | 31 | Cost Explorer permissions are a separate `CwfBillOptional` statement | A client can allow the waste scan without sharing bill data. |
 | 32 | Dashboard scans all enabled regions by default and includes the bill unless `--no-bill` | It's the whole-account view for decisions; `--no-bill` keeps it free. |
 | 33 | Dashboard charts are inline SVG / CSS bars generated in Python, no chart library | One file that works offline and is safe to email; no CDN or JavaScript. |
+| 34 | Waste audit only: `cwf bill` and `cwf dashboard` removed (supersedes #22, #30–#33) | It's a free, public open-source tool: no Cost Explorer charges, smaller scope. The owner keeps bill analysis for paid client work. |
