@@ -35,7 +35,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
 - [x] 10. `cwf bill` (Cost Explorer): removed again in step 11
 - [x] 11. Waste audit only: remove `cwf bill` and `cwf dashboard`; no Cost Explorer
-- [ ] 12. `cwf web`: local page (organization name + Scan), waste report, Download PDF; Docker
+- [x] 12. `cwf web`: local page (organization name + Scan), waste report, Download PDF; Docker
 - [ ] 13. README polish, examples/sample-report.md (fake IDs), architecture diagram
 
 ## Commands
@@ -45,8 +45,9 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup
 .venv/bin/pytest                                               # test
 .venv/bin/cwf scan --region ap-southeast-1                     # run (real AWS: owner approves)
 .venv/bin/cwf scan --all-regions --format html --output reports/scan.html   # file report
+.venv/bin/cwf web                                              # local page: name + Scan + Download PDF
 pipx install git+https://github.com/sajedul5/aws-cost-waste-finder           # install
-docker build -t cwf . && docker run --rm -v ~/.aws:/home/cwf/.aws:ro -e AWS_PROFILE cwf scan
+docker build -t cwf . && docker run --rm --env-file .env -p 127.0.0.1:8080:8080 cwf web --host 0.0.0.0
 ```
 
 ## How to work on each step

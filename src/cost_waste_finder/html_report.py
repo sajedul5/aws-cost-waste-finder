@@ -3,6 +3,7 @@
 from datetime import date
 from html import escape
 
+from cost_waste_finder.branding import Branding
 from cost_waste_finder.models import Finding
 from cost_waste_finder.report import (
     format_cost,
@@ -50,15 +51,72 @@ td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: t
 td.id { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px; }
 tfoot td { font-weight: 650; border-bottom: none; }
 .note, footer { color: var(--muted); font-size: 13px; margin-top: 16px; }
+.prepared-by { float: right; text-align: right; font-size: 13px; line-height: 1.6;
+  margin: 0 0 16px 24px; }
+.prepared-by .label { color: var(--muted); font-size: 12px; }
+.prepared-by a { color: var(--accent); }
+@media (max-width: 640px) { .prepared-by { float: none; text-align: left; margin: 0 0 16px; } }
 """
 
 
-def render_html(findings: list[Finding], regions: list[str], scanned_on: date | None = None) -> str:
+def render_html(
+    findings: list[Finding],
+    regions: list[str],
+    scanned_on: date | None = None,
+    title: str = "AWS cost waste report",
+    branding: Branding | None = None,
+) -> str:
+    return page(title, prepared_by_html(branding) + report_body(findings, regions, scanned_on))
+
+
+def prepared_by_html(branding: Branding | None) -> str:
+    """Contact block; links open in a new tab."""
+    if not branding:
+        return ""
+    new_tab = 'target="_blank" rel="noopener noreferrer"'
+    parts = ['<span class="label">Prepared by</span>', f"<strong>{escape(branding.name)}</strong>"]
+    if branding.title:
+        parts.append(escape(branding.title))
+    if branding.email:
+        email = escape(branding.email)
+        parts.append(f'<a href="mailto:{email}">{email}</a>')
+    if branding.linkedin_url:
+        parts.append(
+            f'<a href="{escape(branding.linkedin_url)}" {new_tab}>'
+            f"LinkedIn: {escape(branding.linkedin_label)}</a>"
+        )
+    return '\n  <aside class="prepared-by">' + "<br>".join(parts) + "</aside>"
+
+
+def page(title: str, body: str, extra_css: str = "", script: str = "") -> str:
+    """A complete HTML document around `body` (already escaped HTML)."""
+    script_tag = f"\n<script>{script}</script>" if script else ""
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{escape(title)}</title>
+<style>{CSS}{extra_css}</style>
+</head>
+<body>
+<main>
+  <h1>{escape(title)}</h1>{body}
+  <footer>Read-only scan by cwf. On-demand list prices in USD; estimates, not a bill.</footer>
+</main>{script_tag}
+</body>
+</html>
+"""
+
+
+def report_body(findings: list[Finding], regions: list[str], scanned_on: date | None = None) -> str:
+    """The report itself: meta line, savings headline, findings table and total."""
     scanned_on = scanned_on or date.today()
     total = total_savings(findings)
     meta = f"{regions_label(regions)} · Scanned: {scanned_on.isoformat()}"
-
-    if findings:
+    if not findings:
+        summary = '\n  <section class="kpi"><div class="value">No waste found.</div></section>'
+    else:
         summary = f"""
   <section class="kpi">
     <div class="label">You can save about</div>
@@ -75,26 +133,7 @@ def render_html(findings: list[Finding], regions: list[str], scanned_on: date | 
     <tfoot><tr><td colspan="4">Total</td><td class="num">{format_cost(total)}</td></tr></tfoot>
   </table>
   </div>{_unpriced_note(findings)}"""
-    else:
-        summary = '\n  <section class="kpi"><div class="value">No waste found.</div></section>'
-
-    return f"""<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>AWS cost waste report</title>
-<style>{CSS}</style>
-</head>
-<body>
-<main>
-  <h1>AWS cost waste report</h1>
-  <p class="meta">{escape(meta)}</p>{summary}
-  <footer>Read-only scan by cwf. On-demand list prices in USD; estimates, not a bill.</footer>
-</main>
-</body>
-</html>
-"""
+    return f'\n  <p class="meta">{escape(meta)}</p>{summary}'
 
 
 def _rows(findings: list[Finding]) -> str:

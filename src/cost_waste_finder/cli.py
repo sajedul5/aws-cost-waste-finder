@@ -172,6 +172,43 @@ def scan(
     emit(render(findings, regions, fmt), output)
 
 
+@cli.command()
+@click.option("--host", default="127.0.0.1", show_default=True, help="Address to listen on.")
+@click.option("--port", type=click.IntRange(1, 65535), default=8080, show_default=True)
+@add_options(ROLE_OPTIONS)
+@threshold_options
+def web(
+    host: str,
+    port: int,
+    role_arn: str | None,
+    external_id: str | None,
+    thresholds: Thresholds,
+) -> None:
+    """Local web page: enter an organization name, click Scan, download the report as PDF."""
+    from cost_waste_finder.branding import load_branding
+    from cost_waste_finder.web import make_server
+
+    def scan_all_regions():
+        session = open_session(role_arn, external_id)
+        return run_scan(session, None, True, thresholds)
+
+    server = make_server(scan_all_regions, host, port, load_branding())
+    shown = "localhost" if host in ("127.0.0.1", "0.0.0.0", "::") else host
+    click.echo(f"cwf web: open http://{shown}:{port}  (Ctrl+C to stop)", err=True)
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        click.echo(
+            f"Listening on {host}: only publish this port to your own machine "
+            "(docker run -p 127.0.0.1:8080:8080).",
+            err=True,
+        )
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()
+
+
 # --- helpers ---------------------------------------------------------------------------------
 
 

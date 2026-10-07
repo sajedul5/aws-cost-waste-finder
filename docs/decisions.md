@@ -38,3 +38,6 @@ Short log of design decisions. Newest at the bottom.
 | 32 | Dashboard scans all enabled regions by default and includes the bill unless `--no-bill` | It's the whole-account view for decisions; `--no-bill` keeps it free. |
 | 33 | Dashboard charts are inline SVG / CSS bars generated in Python, no chart library | One file that works offline and is safe to email; no CDN or JavaScript. |
 | 34 | Waste audit only: `cwf bill` and `cwf dashboard` removed (supersedes #22, #30–#33) | It's a free, public open-source tool: no Cost Explorer charges, smaller scope. The owner keeps bill analysis for paid client work. |
+| 35 | `cwf web` uses the standard-library `http.server`, local only | No web framework to install or maintain; listens on 127.0.0.1 (Docker: publish to 127.0.0.1 only); Host and Origin checks block DNS rebinding and cross-site posts. |
+| 36 | PDF with fpdf2 instead of a headless browser or WeasyPrint | Pure Python, real one-click download. Adds ~75 MB to the image (Pillow, fonttools) vs ~150 MB+ for WeasyPrint system libraries or a browser. Built-in fonts: Latin-1 only. |
+| 37 | "Prepared by" contact details come from `CWF_*` env vars, not code | Public tool: each user's reports show their own details; the owner's contact info isn't published in the repo. Only `https://` LinkedIn links are accepted. |
