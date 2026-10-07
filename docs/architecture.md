@@ -10,9 +10,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 
 | Component | Responsibility |
 |---|---|
-| `cli.py` | Click entry point `cwf`. Loads optional `.env`, builds the session, resolves `--region` (else config default), runs the scanner, prints the report. Credential errors become a clear message. Later: `--all-regions`, `--role-arn`, `--format`, `--output`. |
-| `billing.py` | `cwf bill` only (opt-in): Cost Explorer in `us-east-1`. `GetCostAndUsage` (monthly, by service, credits/refunds excluded, paginated, calls counted) for month −2 to yesterday, plus `GetCostForecast` for the rest of this month (fallback: simple projection). `build_summary()` returns a `BillSummary`; services under $1 are grouped as "Other". |
-| `billing_report.py` | Bill trend as Markdown (months with ▲/▼ change, top services, biggest increases/decreases) or JSON (for the dashboard). |
+| `cli.py` | Command `scan`. Shared `ROLE_OPTIONS` and `@threshold_options`; `open_session()`, `run_scan()` and `emit()` keep commands short. |
 | `session.py` | `make_session()`: default credential chain, or `sts:AssumeRole` into a client's read-only role (`--role-arn`, optional `--external-id`, 1 hour). |
 | `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. `scan_regions()` loops over regions; `enabled_regions()` lists the account's enabled regions. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region, thresholds)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
@@ -21,7 +19,7 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | `models.py` | `Finding` dataclass: check id, resource ID, region, reason, details, monthly cost. |
 | `pricing.py` | `PricingClient`: Pricing API `GetProducts` in `us-east-1`, filtered by the scanned region's location name (e.g. "Asia Pacific (Singapore)", from botocore's region data), on-demand USD price, in-memory cache per run. Lookups: EBS storage, gp3 IOPS, snapshot storage (standard/archive), idle public IPv4 (AmazonVPC), EC2 instance (Linux/Windows), NAT Gateway, load balancer (AWSELB). Products can be picked by usagetype without its region prefix. `apply_costs()` fills `monthly_cost` (the monthly saving) via a check-id → cost-function map; unknown prices stay `None`. |
 | `report.py` | `render_markdown()`: region(s) + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. `render_csv()` (data rows only, formula-injection safe) and `render_json()` (with `details`). |
-| `html_report.py` | `render_html()`: one self-contained page, inline CSS (light/dark), all text escaped, no scripts or external links. `CSS` is reused by the dashboard. |
+| `html_report.py` | `render_html()`: one self-contained page, inline CSS (light/dark), all text escaped, no scripts or external links. `CSS` is reused by the web page. |
 | `output.py` | `RENDERERS` for `--format markdown|csv|json|html`; `write_report()` for `--output FILE`. |
 
 ## Data flow

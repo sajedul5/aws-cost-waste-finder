@@ -9,7 +9,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 
 ## Rules (always follow)
 - Read-only: only `Describe*`, `List*`, `Get*` calls, the Pricing API and `sts:AssumeRole` (for `--role-arn`). Never create, modify or delete AWS resources.
-- Cost Explorer only in `cwf bill` / `cwf dashboard` (opt-in, ~$0.01/call, print call count); never in `cwf scan`.
+- No Cost Explorer (charged per call): this is a free tool.
 - No Lambda: local CLI only. Never scan real AWS from CI.
 - No stored keys in the repo: default AWS credential chain (optional gitignored `.env`, see `.env.example`), or `--role-arn` for client accounts (docs/iam.md). Never read `.env`.
 - Never hard-code a region: `--region`, else the AWS config default. (Owner's account: ap-southeast-1.)
@@ -33,9 +33,10 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 7. Stopped EC2 >30d with volumes; `--all-regions`
 - [x] 8. `--role-arn` and iam/read-only-policy.json
 - [x] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
-- [x] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down
-- [ ] 11. `cwf dashboard`: one self-contained HTML (inline SVG), bill trend + waste + actions, `--title`
-- [ ] 12. README polish, examples/sample-report.md + sample dashboard (fake IDs), architecture diagram
+- [x] 10. `cwf bill` (Cost Explorer): removed again in step 11
+- [x] 11. Waste audit only: remove `cwf bill` and `cwf dashboard`; no Cost Explorer
+- [ ] 12. `cwf web`: local page (organization name + Scan), waste report, Download PDF; Docker
+- [ ] 13. README polish, examples/sample-report.md (fake IDs), architecture diagram
 
 ## Commands
 ```sh
@@ -44,7 +45,6 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup
 .venv/bin/pytest                                               # test
 .venv/bin/cwf scan --region ap-southeast-1                     # run (real AWS: owner approves)
 .venv/bin/cwf scan --all-regions --format html --output reports/scan.html   # file report
-.venv/bin/cwf bill                                             # 3-month bill (Cost Explorer ~$0.02/run: owner approves)
 pipx install git+https://github.com/sajedul5/aws-cost-waste-finder           # install
 docker build -t cwf . && docker run --rm -v ~/.aws:/home/cwf/.aws:ro -e AWS_PROFILE cwf scan
 ```
