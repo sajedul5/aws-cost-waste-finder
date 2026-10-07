@@ -1,4 +1,8 @@
-"""PDF version of the waste report, to share with a client. Built with fpdf2 (pure Python)."""
+"""PDF version of the waste report, to share with a client. Built with fpdf2 (pure Python).
+
+Same look as the HTML report: AWS-console-like navy bar and orange line, plain documentation-style
+summary and table. No AWS logo: this is not an official AWS document.
+"""
 
 from datetime import date, datetime
 
@@ -6,7 +10,7 @@ from fpdf import FPDF
 from fpdf.fonts import FontFace
 
 from cost_waste_finder.branding import Branding
-from cost_waste_finder.html_report import format_scanned
+from cost_waste_finder.html_report import PRODUCT, format_scanned
 from cost_waste_finder.models import Finding
 from cost_waste_finder.report import (
     format_cost,
@@ -16,20 +20,18 @@ from cost_waste_finder.report import (
     total_savings,
 )
 
-# Same colours as the HTML report: indigo brand, green for money.
-INDIGO = (79, 70, 229)
-INDIGO_DARK = (49, 46, 129)
-INDIGO_SOFT = (238, 242, 255)
-INDIGO_TEXT = (55, 48, 163)
-MONEY = (5, 150, 105)
-MONEY_SOFT = (236, 253, 245)
-MUTED = (100, 116, 139)
-TEXT = (15, 23, 42)
+NAVY = (35, 47, 62)  # #232f3e
+ORANGE = (255, 153, 0)  # #ff9900
+LINK = (9, 114, 211)  # #0972d3
+INFO_BG = (242, 248, 253)
+MONEY = (3, 127, 12)  # #037f0c
+TEXT = (0, 7, 22)
+MUTED = (95, 107, 122)
+BORDER = (233, 235, 237)
+HEAD_BG = (250, 250, 250)
 WHITE = (255, 255, 255)
-LINKEDIN = (10, 102, 194)
 
-BAND_HEIGHT = 38  # mm, coloured header on page 1
-BRAND_WIDTH = 82  # mm, "Prepared by" block inside the header
+BAR_HEIGHT = 12  # mm, navy top bar
 COLUMN_WIDTHS = (36, 52, 30, 120, 29)  # mm on landscape A4 (277 mm usable)
 
 
@@ -43,8 +45,21 @@ def report_title(organization: str) -> str:
 
 
 class ReportPDF(FPDF):
+    def header(self) -> None:
+        self.set_fill_color(*NAVY)
+        self.rect(0, 0, self.w, BAR_HEIGHT, style="F")
+        self.set_fill_color(*ORANGE)
+        self.rect(0, BAR_HEIGHT, self.w, 1, style="F")
+        self.set_xy(self.l_margin, 3.5)
+        self.set_font("Helvetica", "B", 10)
+        self.set_text_color(*WHITE)
+        self.cell(0, 5, PRODUCT)
+        self.set_y(BAR_HEIGHT + 8)
+
     def footer(self) -> None:
         self.set_y(-12)
+        self.set_draw_color(*BORDER)
+        self.line(self.l_margin, self.get_y(), self.w - self.r_margin, self.get_y())
         self.set_font("Helvetica", size=8)
         self.set_text_color(*MUTED)
         note = "Read-only scan by cwf. On-demand list prices in USD; estimates, not a bill."
@@ -69,27 +84,30 @@ def render_pdf(
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
-    _header_band(pdf, title, f"Scanned: {format_scanned(scanned_on)}", branding)
-    pdf.set_font("Helvetica", size=8.5)
+    pdf.set_text_color(*TEXT)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.multi_cell(0, 9, safe(title), new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", size=9.5)
     pdf.set_text_color(*MUTED)
-    pdf.multi_cell(0, 4.5, safe(regions_label(regions)), new_x="LMARGIN", new_y="NEXT")
-    pdf.ln(4)
+    pdf.cell(0, 6, f"Scanned: {format_scanned(scanned_on)}", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(3)
+    if branding:
+        _prepared_by(pdf, branding)
 
+    _summary(pdf, findings, regions)
     if not findings:
-        _stat(pdf, pdf.l_margin, "RESULT", "No waste found", MONEY_SOFT, MONEY, 90)
         return bytes(pdf.output())
 
     total = total_savings(findings)
-    y = pdf.get_y()
-    _stat(pdf, pdf.l_margin, "POTENTIAL SAVINGS", f"{format_cost(total)}/mo", MONEY_SOFT, MONEY)
-    _stat(pdf, pdf.l_margin + 72, "PER YEAR", format_cost(total * 12), INDIGO_SOFT, TEXT)
-    _stat(pdf, pdf.l_margin + 144, "FINDINGS", str(len(findings)), INDIGO_SOFT, TEXT)
-    pdf.set_xy(pdf.l_margin, y + 26)
-
+    pdf.set_font("Helvetica", "B", 13)
     pdf.set_text_color(*TEXT)
-    pdf.set_draw_color(226, 232, 240)
+    pdf.cell(0, 8, "Findings", new_x="LMARGIN", new_y="NEXT")
+    pdf.ln(1)
+    pdf.set_draw_color(*BORDER)
+    pdf.set_fill_color(*WHITE)  # rows stay white; only the heading is grey
+    pdf.set_text_color(*TEXT)
     pdf.set_font("Helvetica", size=8.5)
-    heading = FontFace(emphasis="BOLD", color=INDIGO_TEXT, fill_color=INDIGO_SOFT)
+    heading = FontFace(emphasis="BOLD", color=MUTED, fill_color=HEAD_BG)
     with pdf.table(
         col_widths=COLUMN_WIDTHS,
         text_align=("LEFT", "LEFT", "LEFT", "LEFT", "RIGHT"),
@@ -121,89 +139,90 @@ def render_pdf(
     return bytes(pdf.output())
 
 
-def _header_band(pdf: FPDF, title: str, subtitle: str, branding: Branding | None) -> None:
-    """Indigo band across the top: title on the left, highlighted "Prepared by" on the right."""
-    pdf.set_fill_color(*INDIGO_DARK)
-    pdf.rect(0, 0, pdf.w, BAND_HEIGHT, style="F")
-    pdf.set_fill_color(*INDIGO)
-    pdf.rect(0, BAND_HEIGHT - 2, pdf.w, 2, style="F")  # accent line
-
-    text_width = pdf.epw - (BRAND_WIDTH + 10 if branding else 0)
-    pdf.set_xy(pdf.l_margin, 9)
-    pdf.set_text_color(199, 210, 254)
-    pdf.set_font("Helvetica", "B", 8)
-    pdf.cell(text_width, 4, "AWS COST AUDIT", new_x="LMARGIN", new_y="NEXT")
-    pdf.set_text_color(*WHITE)
-    pdf.set_font("Helvetica", "B", 19)
-    pdf.multi_cell(text_width, 9, safe(title), new_x="LMARGIN", new_y="NEXT")
-    pdf.set_font("Helvetica", size=9)
-    pdf.set_text_color(224, 231, 255)
-    pdf.cell(text_width, 5, safe(subtitle), new_x="LMARGIN", new_y="NEXT")
-
-    if branding:
-        _prepared_by(pdf, branding)
-    pdf.set_xy(pdf.l_margin, BAND_HEIGHT + 5)
-
-
 def _prepared_by(pdf: FPDF, branding: Branding) -> None:
-    x = pdf.w - pdf.r_margin - BRAND_WIDTH
-    pdf.set_fill_color(67, 56, 202)
-    pdf.rect(x - 4, 5, BRAND_WIDTH + 4, BAND_HEIGHT - 10, style="F", round_corners=True)
-    pdf.set_xy(x, 8)
-    pdf.set_font("Helvetica", "B", 7)
-    pdf.set_text_color(199, 210, 254)
-    pdf.cell(BRAND_WIDTH - 2, 4, "PREPARED BY", align="R", new_x="LEFT", new_y="NEXT")
-    pdf.set_font("Helvetica", "B", 13)
-    pdf.set_text_color(*WHITE)
-    pdf.cell(BRAND_WIDTH - 2, 6, safe(branding.name), align="R", new_x="LEFT", new_y="NEXT")
+    """Blue info note: name, title, clickable email and LinkedIn."""
+    x, y, width = pdf.l_margin, pdf.get_y(), pdf.epw
+    height = 22 if branding.title else 17
+    pdf.set_fill_color(*INFO_BG)
+    pdf.set_draw_color(*LINK)
+    pdf.rect(x, y, width, height, style="DF", round_corners=True, corner_radius=2)
+    pdf.set_fill_color(*LINK)
+    pdf.rect(x, y, 1.5, height, style="F")
+
+    left = x + 7
+    pdf.set_xy(left, y + 3)
+    pdf.set_font("Helvetica", "B", 7.5)
+    pdf.set_text_color(*MUTED)
+    pdf.cell(0, 4, "Prepared by", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_x(left)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*TEXT)
+    pdf.cell(0, 6, safe(branding.name), new_x="LMARGIN", new_y="NEXT")
     if branding.title:
-        pdf.set_font("Helvetica", size=8.5)
-        pdf.set_text_color(224, 231, 255)
-        title = safe(branding.title.replace("|", "\u00b7"))  # "|" looks like "I" in Helvetica
-        pdf.cell(BRAND_WIDTH - 2, 4.5, title, align="R", new_x="LEFT", new_y="NEXT")
+        pdf.set_x(left)
+        pdf.set_font("Helvetica", size=9)
+        pdf.set_text_color(*MUTED)
+        title = safe(branding.title.replace("|", "·"))  # "|" looks like "I" in Helvetica
+        pdf.cell(0, 5, title, new_x="LMARGIN", new_y="NEXT")
+
+    # links on the right, blue like documentation links
     links = []
     if branding.email:
         links.append((branding.email, f"mailto:{branding.email}"))
     if branding.linkedin_url:
         links.append(("LinkedIn", branding.linkedin_url))
-    if links:
-        _link_row(pdf, x + BRAND_WIDTH - 2, pdf.get_y() + 1.5, links)
+    pdf.set_font("Helvetica", "B", 9.5)
+    pdf.set_text_color(*LINK)
+    link_y = y + height / 2 - 2.5
+    right = x + width - 6
+    for text, url in reversed(links):
+        w = pdf.get_string_width(safe(text)) + 1
+        right -= w
+        pdf.set_xy(right, link_y)
+        pdf.cell(w, 5, safe(text), link=url)
+        right -= 8
+    pdf.set_xy(x, y + height + 5)
 
 
-def _link_row(pdf: FPDF, right: float, y: float, links: list[tuple[str, str]]) -> None:
-    """Small "pills" (email, LinkedIn) right-aligned at `right`, each a clickable link."""
-    pdf.set_font("Helvetica", "B", 8)
-    gap, pad, height = 2, 2.5, 5.5
-    widths = [pdf.get_string_width(safe(text)) + 2 * pad for text, _ in links]
-    x = right - sum(widths) - gap * (len(links) - 1)
-    for (text, url), width in zip(links, widths, strict=True):
-        linkedin = text == "LinkedIn"
-        pdf.set_fill_color(*(LINKEDIN if linkedin else WHITE))
-        pdf.set_text_color(*(WHITE if linkedin else INDIGO_DARK))
-        pdf.set_xy(x, y)
-        pdf.cell(width, height, safe(text), align="C", fill=True, link=url)
-        x += width + gap
+def _summary(pdf: FPDF, findings: list[Finding], regions: list[str]) -> None:
+    """Bordered "Summary" box: savings per month (green), per year, findings, regions."""
+    x, y, width = pdf.l_margin, pdf.get_y(), pdf.epw
+    total = total_savings(findings)
+    if findings:
+        items = [
+            ("Potential savings per month", format_cost(total), MONEY),
+            ("Per year", format_cost(total * 12), TEXT),
+            ("Findings", str(len(findings)), TEXT),
+        ]
+    else:
+        items = [("Result", "No waste found", MONEY)]
 
+    pdf.set_font("Helvetica", size=8)
+    regions_text = safe(regions_label(regions))
+    regions_lines = len(pdf.multi_cell(width - 12, 4, regions_text, dry_run=True, output="LINES"))
+    height = 34 + regions_lines * 4
+    pdf.set_draw_color(*BORDER)
+    pdf.rect(x, y, width, height, style="D", round_corners=True, corner_radius=2)
+    pdf.set_xy(x + 6, y + 3)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.set_text_color(*TEXT)
+    pdf.cell(0, 7, "Summary")
+    pdf.line(x, y + 12, x + width, y + 12)
 
-def _stat(
-    pdf: FPDF,
-    x: float,
-    label: str,
-    value: str,
-    fill: tuple[int, int, int],
-    color: tuple[int, int, int],
-    width: float = 66,
-) -> None:
-    """A rounded stat card: small label, big value."""
-    y = pdf.get_y()
-    pdf.set_fill_color(*fill)
-    pdf.rect(x, y, width, 20, style="F", round_corners=True)
-    pdf.set_xy(x + 5, y + 3)
-    pdf.set_font("Helvetica", "B", 7.5)
+    column = (width - 12) / 3
+    for index, (label, value, color) in enumerate(items):
+        cx = x + 6 + index * column
+        pdf.set_xy(cx, y + 15)
+        pdf.set_font("Helvetica", size=8.5)
+        pdf.set_text_color(*MUTED)
+        pdf.cell(column, 4, label)
+        pdf.set_xy(cx, y + 20)
+        pdf.set_font("Helvetica", "B", 16)
+        pdf.set_text_color(*color)
+        pdf.cell(column, 8, safe(value))
+
+    pdf.set_xy(x + 6, y + 31)
+    pdf.set_font("Helvetica", size=8)
     pdf.set_text_color(*MUTED)
-    pdf.cell(width - 10, 4, label)
-    pdf.set_xy(x + 5, y + 8)
-    pdf.set_font("Helvetica", "B", 17)
-    pdf.set_text_color(*color)
-    pdf.cell(width - 10, 9, safe(value))
-    pdf.set_xy(x, y)
+    pdf.multi_cell(width - 12, 4, regions_text)
+    pdf.set_xy(x, y + height + 6)

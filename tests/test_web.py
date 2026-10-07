@@ -69,7 +69,7 @@ def test_scan_then_report_and_downloads(server) -> None:
     _, body = request(server, "GET", "/")
     page = body.decode()
     assert "Example Client - AWS Cost Waste Report" in page
-    assert "$47.11/mo" in page
+    assert '<dd class="money">$47.11</dd>' in page
     assert "Scanned: " in page and " UTC" in page
     assert "&lt;b&gt;old&lt;/b&gt;" in page  # escaped
     assert 'href="/report.pdf"' in page

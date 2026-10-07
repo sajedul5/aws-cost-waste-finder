@@ -25,7 +25,8 @@ def test_pdf_has_title_total_and_rows() -> None:
 
     assert pdf.startswith(b"%PDF-")
     assert "Example Client - AWS Cost Waste Report" in content
-    assert "$47.11/mo" in content
+    assert "Potential savings per month" in content
+    assert "($47.11) Tj" in content
     assert "$565.32" in content  # per year
     assert "Scanned: 2026-10-07" in content
     assert content.index("nat-0ccc3333dddd4444e") < content.index("snap-0aaa1111bbbb2222c")
@@ -60,7 +61,7 @@ def test_prepared_by_block_with_links() -> None:
     )
     content = text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False, branding=branding))
 
-    assert "PREPARED BY" in content
+    assert "Prepared by" in content
     assert "Jane Doe" in content and "DevOps Engineer" in content
     assert "/URI (mailto:jane@example.com)" in content
     assert "/URI (https://www.linkedin.com/in/jane-doe/)" in content
@@ -70,4 +71,4 @@ def test_prepared_by_block_with_links() -> None:
 
 
 def test_no_prepared_by_without_branding() -> None:
-    assert "PREPARED BY" not in text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False))
+    assert "Prepared by" not in text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False))

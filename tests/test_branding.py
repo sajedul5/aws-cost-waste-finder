@@ -34,11 +34,11 @@ def test_html_links_open_in_new_tab() -> None:
     assert "Prepared by" in page and '<div class="brand-name">Jane Doe</div>' in page
     assert 'href="mailto:jane@example.com"' in page
     assert (
-        '<a class="pill linkedin" href="https://www.linkedin.com/in/jane-doe/" '
-        'target="_blank" rel="noopener noreferrer">' in page
+        '<a href="https://www.linkedin.com/in/jane-doe/" target="_blank" '
+        'rel="noopener noreferrer">LinkedIn' in page
     )
     assert ">linkedin.com/in/jane-doe<" not in page  # label is "LinkedIn", not the URL
-    assert '<div class="avatar">JD</div>' in page
+    assert "avatar" not in page  # no initials circle
 
 
 def test_html_escapes_branding() -> None:
