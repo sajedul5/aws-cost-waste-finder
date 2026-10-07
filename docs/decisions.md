@@ -33,3 +33,5 @@ Short log of design decisions. Newest at the bottom.
 | 27 | HTML report is one self-contained file: inline CSS, no JavaScript, no external links | Safe to email or attach for a client; works offline; nothing to load or track. |
 | 28 | CSV cells starting with `= + - @` get a leading `'` | Prevents formula injection when a client opens the CSV in Excel/Sheets (resource names come from their account). |
 | 29 | Docker image runs as non-root; credentials are mounted, never built in | `.dockerignore` excludes `.env`, `reports/`, `.git`; CI builds the image on every PR. |
+| 30 | Bill trend: 2 full months + current month so far with AWS forecast; per-service current month uses a simple projection | Fair comparison (a half month always looks lower). One forecast call for the total keeps the cost at ~2 calls (~$0.02); a forecast per service would cost one call each. |
+| 31 | Cost Explorer permissions are a separate `CwfBillOptional` statement | A client can allow the waste scan without sharing bill data. |

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import boto3
 from moto import mock_aws
 
+from cost_waste_finder.billing import get_bill_summary
 from cost_waste_finder.checks import idle_load_balancers, idle_nat_gateways, stopped_ec2
 from cost_waste_finder.config import Thresholds
 from cost_waste_finder.scanner import enabled_regions, scan_regions
@@ -22,6 +23,7 @@ IAM_PREFIX = {
     "elbv2": "elasticloadbalancing",
     "elb": "elasticloadbalancing",
     "pricing": "pricing",
+    "ce": "ce",
 }
 
 PRICE_ITEM = json.dumps(
@@ -86,8 +88,19 @@ def test_policy_covers_every_api_call() -> None:
         record(model)
         return SimpleNamespace(status_code=200, headers={}), {"PriceList": [PRICE_ITEM]}
 
+    def fake_cost_explorer(model, **kwargs):
+        # Never call real Cost Explorer (it charges per call): answer locally.
+        record(model)
+        body = (
+            {"ResultsByTime": []}
+            if model.name == "GetCostAndUsage"
+            else {"Total": {"Amount": "1", "Unit": "USD"}}
+        )
+        return SimpleNamespace(status_code=200, headers={}), body
+
     session.events.register("before-call", record)
     session.events.register("before-call.pricing.GetProducts", fake_pricing)
+    session.events.register("before-call.ce", fake_cost_explorer)
 
     enabled_regions(session, REGION)
     findings = scan_regions(session, [REGION])
@@ -97,6 +110,8 @@ def test_policy_covers_every_api_call() -> None:
     short = Thresholds(lookback_days=1, stopped_days=1)
     for check in (idle_load_balancers.check, idle_nat_gateways.check, stopped_ec2.check):
         check(session, REGION, short, now=later)
+
+    get_bill_summary(session)  # cwf bill
 
     assert findings, "the fake account should produce findings"
     expected_calls = {
@@ -112,6 +127,8 @@ def test_policy_covers_every_api_call() -> None:
         "elasticloadbalancing:DescribeTargetHealth",
         "cloudwatch:GetMetricStatistics",
         "pricing:GetProducts",
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast",
     }
     assert expected_calls <= called, f"code paths not exercised: {expected_calls - called}"
     missing = called - policy_actions()

@@ -33,7 +33,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 7. Stopped EC2 >30d with volumes; `--all-regions`
 - [x] 8. `--role-arn` and iam/read-only-policy.json
 - [x] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
-- [ ] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down
+- [x] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down
 - [ ] 11. `cwf dashboard`: one self-contained HTML (inline SVG), bill trend + waste + actions, `--title`
 - [ ] 12. README polish, examples/sample-report.md + sample dashboard (fake IDs), architecture diagram
 
@@ -44,6 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"   # setup
 .venv/bin/pytest                                               # test
 .venv/bin/cwf scan --region ap-southeast-1                     # run (real AWS: owner approves)
 .venv/bin/cwf scan --all-regions --format html --output reports/scan.html   # file report
+.venv/bin/cwf bill                                             # 3-month bill (Cost Explorer ~$0.02/run: owner approves)
 pipx install git+https://github.com/sajedul5/aws-cost-waste-finder           # install
 docker build -t cwf . && docker run --rm -v ~/.aws:/home/cwf/.aws:ro -e AWS_PROFILE cwf scan
 ```
