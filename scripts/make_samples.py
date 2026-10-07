@@ -1,10 +1,12 @@
 """Builds the README samples from FAKE data (no AWS calls, no real resource IDs).
 
 Writes examples/sample-report.md, examples/sample-report.pdf and docs/images/web-page.html
-(screenshot it to web-page.png). "Prepared by" details come from CWF_* in your .env.
+(screenshot it to web-page.png). "Prepared by" details come from CWF_* in your .env
+(the email is left out, because these files are public).
 Run: python scripts/make_samples.py
 """
 
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -93,6 +95,8 @@ FINDINGS = [
 def main() -> None:
     load_dotenv(ROOT / ".env")
     branding = load_branding()
+    if branding:
+        branding = replace(branding, email="")  # public samples: no email address
     examples = ROOT / "examples"
     examples.mkdir(exist_ok=True)
 
