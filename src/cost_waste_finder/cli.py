@@ -1,5 +1,7 @@
 """Command-line entry point: `cwf`."""
 
+from pathlib import Path
+
 import boto3
 import click
 from botocore.exceptions import BotoCoreError, ClientError
@@ -7,7 +9,7 @@ from dotenv import load_dotenv
 
 from cost_waste_finder import __version__
 from cost_waste_finder.config import Thresholds
-from cost_waste_finder.report import render_markdown
+from cost_waste_finder.output import RENDERERS, render, write_report
 from cost_waste_finder.scanner import enabled_regions, scan_regions
 from cost_waste_finder.session import make_session
 
@@ -40,6 +42,19 @@ DEFAULTS = Thresholds()
     help="Read-only IAM role to assume in a client account (see docs/iam.md).",
 )
 @click.option("--external-id", help="External ID the client set on that role's trust policy.")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(list(RENDERERS)),
+    default="markdown",
+    show_default=True,
+    help="Report format.",
+)
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the report to this file (e.g. reports/scan.html) instead of the screen.",
+)
 @click.option(
     "--lookback-days",
     type=click.IntRange(min=1),
@@ -94,6 +109,8 @@ def scan(
     all_regions: bool,
     role_arn: str | None,
     external_id: str | None,
+    fmt: str,
+    output: Path | None,
     lookback_days: int,
     cpu_threshold: float,
     network_threshold_mb: float,
@@ -127,7 +144,12 @@ def scan(
     except BotoCoreError as error:
         # e.g. no credentials, unknown profile, expired SSO token
         raise click.ClickException(f"AWS credentials problem: {error}") from error
-    click.echo(render_markdown(findings, regions), nl=False)
+    report = render(findings, regions, fmt)
+    if output:
+        write_report(report, output)
+        click.echo(f"Report written to {output}", err=True)
+    else:
+        click.echo(report, nl=False)
 
 
 def assume_role_or_exit(role_arn: str | None, external_id: str | None) -> boto3.Session:
