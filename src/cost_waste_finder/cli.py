@@ -2,13 +2,14 @@
 
 import boto3
 import click
-from botocore.exceptions import BotoCoreError
+from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 
 from cost_waste_finder import __version__
 from cost_waste_finder.config import Thresholds
 from cost_waste_finder.report import render_markdown
 from cost_waste_finder.scanner import enabled_regions, scan_regions
+from cost_waste_finder.session import make_session
 
 
 def resolve_region(session: boto3.Session, region: str | None) -> str:
@@ -34,6 +35,11 @@ DEFAULTS = Thresholds()
 @cli.command()
 @click.option("--region", help="AWS region to scan. Defaults to your AWS config region.")
 @click.option("--all-regions", is_flag=True, help="Scan every region enabled for the account.")
+@click.option(
+    "--role-arn",
+    help="Read-only IAM role to assume in a client account (see docs/iam.md).",
+)
+@click.option("--external-id", help="External ID the client set on that role's trust policy.")
 @click.option(
     "--lookback-days",
     type=click.IntRange(min=1),
@@ -86,6 +92,8 @@ DEFAULTS = Thresholds()
 def scan(
     region: str | None,
     all_regions: bool,
+    role_arn: str | None,
+    external_id: str | None,
     lookback_days: int,
     cpu_threshold: float,
     network_threshold_mb: float,
@@ -106,8 +114,10 @@ def scan(
     )
     if region and all_regions:
         raise click.UsageError("Use either --region or --all-regions, not both.")
+    if external_id and not role_arn:
+        raise click.UsageError("--external-id needs --role-arn.")
     try:
-        session = boto3.Session()
+        session = assume_role_or_exit(role_arn, external_id)
         if all_regions:
             # DescribeRegions works from any region; prefer the configured one.
             regions = enabled_regions(session, session.region_name or "us-east-1")
@@ -118,6 +128,17 @@ def scan(
         # e.g. no credentials, unknown profile, expired SSO token
         raise click.ClickException(f"AWS credentials problem: {error}") from error
     click.echo(render_markdown(findings, regions), nl=False)
+
+
+def assume_role_or_exit(role_arn: str | None, external_id: str | None) -> boto3.Session:
+    try:
+        return make_session(role_arn, external_id)
+    except ClientError as error:
+        details = error.response["Error"]
+        raise click.ClickException(
+            f"Could not assume role: {details['Code']}: {details.get('Message', '')}. "
+            "Check the role's trust policy and external ID (docs/iam.md)."
+        ) from error
 
 
 def main() -> None:

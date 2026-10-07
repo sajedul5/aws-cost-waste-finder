@@ -8,13 +8,13 @@ cost. It runs locally only. Public portfolio project for AWS cost-optimization f
 Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 
 ## Rules (always follow)
-- Read-only: only `Describe*`, `List*`, `Get*` calls and the Pricing API. Never create, modify or delete AWS resources.
+- Read-only: only `Describe*`, `List*`, `Get*` calls, the Pricing API and `sts:AssumeRole` (for `--role-arn`). Never create, modify or delete AWS resources.
 - Cost Explorer only in `cwf bill` / `cwf dashboard` (opt-in, ~$0.01/call, print call count); never in `cwf scan`.
 - No Lambda: local CLI only. Never scan real AWS from CI.
-- No stored keys in the repo: default AWS credential chain (optional gitignored `.env`, see `.env.example`); `--role-arn` comes in step 8. Never read `.env`.
+- No stored keys in the repo: default AWS credential chain (optional gitignored `.env`, see `.env.example`), or `--role-arn` for client accounts (docs/iam.md). Never read `.env`.
 - Never hard-code a region: `--region`, else the AWS config default. (Owner's account: ap-southeast-1.)
 - Never commit account IDs, ARNs, real reports or client data. Use fake IDs in examples.
-- Every check gets a moto unit test. CI never calls real AWS.
+- Every check gets a moto unit test. Every AWS call must be in `iam/read-only-policy.json` (enforced by `tests/test_iam_policy.py`). CI never calls real AWS.
 - No LICENSE file.
 - Simple, readable code. Python 3.11+, type hints, ruff (lint + format), pytest, local `.venv`.
 
@@ -31,7 +31,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 5. Checks: old snapshots (>90d, not used by AMI), unattached EIPs, gp2 -> gp3
 - [x] 6. CloudWatch checks (14d, configurable thresholds): idle EC2, idle NAT GW, idle LBs
 - [x] 7. Stopped EC2 >30d with volumes; `--all-regions`
-- [ ] 8. `--role-arn` and iam/read-only-policy.json
+- [x] 8. `--role-arn` and iam/read-only-policy.json
 - [ ] 9. `--format markdown|csv|json|html`, `--output FILE`, pipx install, Dockerfile
 - [ ] 10. `cwf bill`: Cost Explorer, 2 full months + current month with forecast, per-service up/down
 - [ ] 11. `cwf dashboard`: one self-contained HTML (inline SVG), bill trend + waste + actions, `--title`

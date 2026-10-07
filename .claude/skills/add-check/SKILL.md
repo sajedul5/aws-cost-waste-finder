@@ -37,7 +37,8 @@ so the scanner runs it.
 
 ## 5. Document it
 - Add or update the row in `docs/checks.md`: what it finds, logic, thresholds, IAM permissions.
-- New IAM action? It must also go in `iam/read-only-policy.json` (from step 8).
+- New IAM action? Add it to `iam/read-only-policy.json` and make `tests/test_iam_policy.py`'s fake
+  account exercise the new code path; the test fails if a call isn't in the policy.
 - A notable design choice? One line in `docs/decisions.md`.
 
 ## 6. Verify

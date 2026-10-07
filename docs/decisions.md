@@ -28,3 +28,5 @@ Short log of design decisions. Newest at the bottom.
 | 22 | Cost Explorer allowed only in `cwf bill` / `cwf dashboard` (steps 10–11), opt-in | Owner wants a 3-month bill trend; free CloudWatch billing metrics were empty in their account. ~$0.01 per call, call count printed. |
 | 23 | Stopped time comes from `StateTransitionReason`; unreadable = skipped | It's the only Describe field with the stop time; guessing would give wrong ages. |
 | 24 | `--all-regions` scans only enabled regions, 8 in parallel (threads), with one shared, locked price cache | Opt-in regions that aren't enabled would fail. The work is waiting on AWS: 17 regions went from 2 min 10 s to 20 s. boto3 Sessions aren't thread-safe, so only client creation is locked (`ThreadSafeSession`). |
+| 25 | Client access via `sts:AssumeRole` into a read-only role, with an optional external ID | No shared keys; the client controls and can delete the role; external ID prevents confused-deputy misuse. |
+| 26 | A test records every AWS call in a full moto scan and checks it against the IAM policy | The policy can't silently fall behind the code; also asserts the policy is Describe/Get/List only. |
