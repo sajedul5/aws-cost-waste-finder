@@ -8,6 +8,8 @@ from botocore.exceptions import BotoCoreError, ClientError
 from dotenv import load_dotenv
 
 from cost_waste_finder import __version__
+from cost_waste_finder.billing import COST_PER_CALL_USD, get_bill_summary
+from cost_waste_finder.billing_report import BILL_RENDERERS
 from cost_waste_finder.config import Thresholds
 from cost_waste_finder.output import RENDERERS, render, write_report
 from cost_waste_finder.scanner import enabled_regions, scan_regions
@@ -145,6 +147,49 @@ def scan(
         # e.g. no credentials, unknown profile, expired SSO token
         raise click.ClickException(f"AWS credentials problem: {error}") from error
     report = render(findings, regions, fmt)
+    if output:
+        write_report(report, output)
+        click.echo(f"Report written to {output}", err=True)
+    else:
+        click.echo(report, nl=False)
+
+
+@cli.command()
+@click.option("--role-arn", help="Read-only IAM role to assume in a client account.")
+@click.option("--external-id", help="External ID the client set on that role's trust policy.")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(list(BILL_RENDERERS)),
+    default="markdown",
+    show_default=True,
+    help="Report format.",
+)
+@click.option(
+    "--output",
+    type=click.Path(dir_okay=False, path_type=Path),
+    help="Write the report to this file instead of the screen.",
+)
+def bill(role_arn: str | None, external_id: str | None, fmt: str, output: Path | None) -> None:
+    """3-month bill trend per service (Cost Explorer: about $0.01 per API call)."""
+    if external_id and not role_arn:
+        raise click.UsageError("--external-id needs --role-arn.")
+    try:
+        session = assume_role_or_exit(role_arn, external_id)
+        summary = get_bill_summary(session)
+    except ClientError as error:
+        details = error.response["Error"]
+        raise click.ClickException(
+            f"Cost Explorer error: {details['Code']}: {details.get('Message', '')}. "
+            "Cost Explorer must be enabled, and you need ce:GetCostAndUsage and "
+            "ce:GetCostForecast (docs/iam.md)."
+        ) from error
+    except BotoCoreError as error:
+        raise click.ClickException(f"AWS credentials problem: {error}") from error
+
+    calls = summary.api_calls
+    click.echo(f"Cost Explorer calls: {calls} (~${calls * COST_PER_CALL_USD:.2f})", err=True)
+    report = BILL_RENDERERS[fmt](summary)
     if output:
         write_report(report, output)
         click.echo(f"Report written to {output}", err=True)

@@ -26,6 +26,15 @@
         "pricing:GetProducts"
       ],
       "Resource": "*"
+    },
+    {
+      "Sid": "CwfBillOptional",
+      "Effect": "Allow",
+      "Action": [
+        "ce:GetCostAndUsage",
+        "ce:GetCostForecast"
+      ],
+      "Resource": "*"
     }
   ]
 }

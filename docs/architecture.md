@@ -11,6 +11,8 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | Component | Responsibility |
 |---|---|
 | `cli.py` | Click entry point `cwf`. Loads optional `.env`, builds the session, resolves `--region` (else config default), runs the scanner, prints the report. Credential errors become a clear message. Later: `--all-regions`, `--role-arn`, `--format`, `--output`. |
+| `billing.py` | `cwf bill` only (opt-in): Cost Explorer in `us-east-1`. `GetCostAndUsage` (monthly, by service, credits/refunds excluded, paginated, calls counted) for month −2 to yesterday, plus `GetCostForecast` for the rest of this month (fallback: simple projection). `build_summary()` returns a `BillSummary`; services under $1 are grouped as "Other". |
+| `billing_report.py` | Bill trend as Markdown (months with ▲/▼ change, top services, biggest increases/decreases) or JSON (for the dashboard). |
 | `session.py` | `make_session()`: default credential chain, or `sts:AssumeRole` into a client's read-only role (`--role-arn`, optional `--external-id`, 1 hour). |
 | `scanner.py` | `scan(session, region)` runs every check in `CHECKS`, then prices the findings. `scan_regions()` loops over regions; `enabled_regions()` lists the account's enabled regions. A check that fails with a `ClientError` (e.g. AccessDenied) is skipped with a warning on stderr; a pricing failure leaves costs as n/a. |
 | `checks/` | One module per waste check. Each takes `(session, region, thresholds)` and returns `list[Finding]`. Read-only calls only. Registered in `checks/__init__.py`. |
