@@ -74,6 +74,7 @@ th { background: var(--head); font-weight: 700; color: var(--muted); }
 tbody tr:hover { background: var(--head); }
 td.num, th.num { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 code, td.id { font-family: Monaco, Menlo, Consolas, "Courier New", monospace; font-size: 13px; }
+td.nowrap, code { white-space: nowrap; }
 code { background: var(--code); border-radius: 4px; padding: 1px 5px; }
 tfoot td { font-weight: 700; border-bottom: none; }
 tfoot td.num { color: var(--money); }
@@ -201,7 +202,7 @@ def _rows(findings: list[Finding]) -> str:
             "      <tr>"
             f"<td><code>{escape(f.check)}</code></td>"
             f'<td class="id">{escape(f.resource_id)}</td>'
-            f"<td>{escape(f.region)}</td>"
+            f'<td class="nowrap">{escape(f.region)}</td>'
             f"<td>{escape(f.reason)}</td>"
             f'<td class="num">{format_cost(f.monthly_cost)}</td>'
             "</tr>"
