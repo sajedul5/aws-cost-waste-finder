@@ -17,7 +17,6 @@ def test_load_branding_from_env() -> None:
     assert branding == Branding(
         "Jane Doe", "DevOps Engineer", "jane@example.com", "https://www.linkedin.com/in/jane-doe/"
     )
-    assert branding.linkedin_label == "linkedin.com/in/jane-doe"
 
 
 def test_no_name_means_no_branding() -> None:
@@ -32,15 +31,25 @@ def test_only_https_links_are_used() -> None:
 def test_html_links_open_in_new_tab() -> None:
     page = render_html([], ["ap-southeast-1"], date(2026, 10, 7), "Acme", load_branding(ENV))
 
-    assert "Prepared by" in page and "<strong>Jane Doe</strong>" in page
-    assert '<a href="mailto:jane@example.com">' in page
+    assert "Prepared by" in page and '<div class="brand-name">Jane Doe</div>' in page
+    assert 'href="mailto:jane@example.com"' in page
     assert (
-        '<a href="https://www.linkedin.com/in/jane-doe/" target="_blank" '
-        'rel="noopener noreferrer">' in page
+        '<a class="pill linkedin" href="https://www.linkedin.com/in/jane-doe/" '
+        'target="_blank" rel="noopener noreferrer">' in page
     )
+    assert ">linkedin.com/in/jane-doe<" not in page  # label is "LinkedIn", not the URL
+    assert '<div class="avatar">JD</div>' in page
 
 
 def test_html_escapes_branding() -> None:
     page = render_html([], ["ap-southeast-1"], None, "Acme", Branding("<b>x</b>"))
     assert "<b>x</b>" not in page
     assert "&lt;b&gt;x&lt;/b&gt;" in page
+
+
+def test_surrounding_quotes_are_removed() -> None:
+    branding = load_branding(
+        {"CWF_PREPARED_BY": '"Jane Doe"', "CWF_CONTACT_EMAIL": "'j@example.com'"}
+    )
+    assert branding.name == "Jane Doe"
+    assert branding.email == "j@example.com"

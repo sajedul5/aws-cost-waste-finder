@@ -21,8 +21,8 @@ cwf scan  ──►  scanner  ──►  checks/*  ──►  pricing  ──►
 | `report.py` | `render_markdown()`: region(s) + date header (no account ID), "You can save ~$X/month", table sorted by monthly cost (unpriced last, shown n/a), total row. `render_csv()` (data rows only, formula-injection safe) and `render_json()` (with `details`). |
 | `html_report.py` | `render_html()`: one self-contained page, inline CSS (light/dark), all text escaped, no scripts or external links. `page()` and `report_body()` are reused by the web page. |
 | `branding.py` | Optional "Prepared by" details (name, title, email, LinkedIn) from `CWF_*` environment variables, so they stay in the user's own `.env`, not the public repo. |
-| `pdf_report.py` | `render_pdf()`: client PDF with fpdf2 (pure Python): title "<Company> - AWS Cost Waste Report", optional "Prepared by" block (clickable email and LinkedIn), savings per month and year, findings table, total, page footer. Built-in fonts, so non-Latin characters become `?`. |
-| `web.py` | `cwf web`: standard-library HTTP server. `/` form (organization name + Scan) and latest report; `POST /scan` runs a scan of all enabled regions (one at a time); `/report.pdf` and `/report.html` downloads. Only localhost host names are accepted and cross-site posts are refused. |
+| `pdf_report.py` | `render_pdf()`: client PDF with fpdf2 (pure Python): title "<Company> - AWS Cost Waste Report", indigo header band with the scan time and a highlighted "Prepared by" card (clickable email and "LinkedIn" links, URL not shown), savings per month and year, findings table, total, page footer. Built-in fonts, so non-Latin characters become `?`. |
+| `web.py` | `cwf web`: standard-library HTTP server. `/` page "AWS Cost Waste Audit" with the branding card, company name + Scan, and the latest report; `POST /scan` scans all enabled regions (one at a time); `/report.pdf` download. Only localhost host names are accepted and cross-site posts are refused. |
 | `output.py` | `RENDERERS` for `--format markdown|csv|json|html`; `write_report()` for `--output FILE`. |
 
 ## Data flow

@@ -55,7 +55,8 @@ def test_home_page_has_form(server) -> None:
 
     assert response.status == 200
     assert 'name="organization"' in page
-    assert 'placeholder="Company name"' in page
+    assert 'aria-label="Company name"' in page
+    assert "AWS Cost Waste Audit" in page
     assert ">Scan</button>" in page
     assert "Download PDF" not in page  # nothing scanned yet
 
@@ -68,20 +69,20 @@ def test_scan_then_report_and_downloads(server) -> None:
     _, body = request(server, "GET", "/")
     page = body.decode()
     assert "Example Client - AWS Cost Waste Report" in page
-    assert "$47.11/month" in page
+    assert "$47.11/mo" in page
+    assert "Scanned: " in page and " UTC" in page
     assert "&lt;b&gt;old&lt;/b&gt;" in page  # escaped
     assert 'href="/report.pdf"' in page
+    assert "Download HTML" not in page
 
     response, pdf = request(server, "GET", "/report.pdf")
     assert response.status == 200
     assert response.getheader("Content-Type") == "application/pdf"
-    assert "example-client-aws-waste-report-" in response.getheader("Content-Disposition")
+    assert "example-client-aws-cost-waste-report-" in response.getheader("Content-Disposition")
     assert pdf.startswith(b"%PDF-")
 
-    response, html = request(server, "GET", "/report.html")
-    assert response.status == 200
-    assert b"<title>Example Client - AWS Cost Waste Report</title>" in html
-    assert b"<script" not in html  # the shared report stays script-free
+    response, _ = request(server, "GET", "/report.html")
+    assert response.status == 404  # PDF only
 
 
 def test_downloads_before_scan_redirect_home(server) -> None:
@@ -122,8 +123,20 @@ def test_unknown_path(server) -> None:
 def test_clean_name_and_file_stem() -> None:
     assert clean_name("  Acme\n  Pty  Ltd ") == "Acme Pty Ltd"
     assert len(clean_name("x" * 500)) == 80
-    from datetime import date
+    from datetime import UTC, datetime
 
-    report = Report("Acme Pty Ltd", REGIONS, [], date(2026, 10, 7))
-    assert file_stem(report) == "acme-pty-ltd-aws-waste-report-2026-10-07"
-    assert file_stem(Report("", REGIONS, [], date(2026, 10, 7))) == "aws-waste-report-2026-10-07"
+    when = datetime(2026, 10, 7, 9, 32, tzinfo=UTC)
+    assert file_stem(Report("Acme Pty Ltd", REGIONS, [], when)) == (
+        "acme-pty-ltd-aws-cost-waste-report-2026-10-07"
+    )
+    assert file_stem(Report("", REGIONS, [], when)) == "aws-cost-waste-report-2026-10-07"
+
+
+def test_branding_card_on_page() -> None:
+    from cost_waste_finder.branding import Branding
+    from cost_waste_finder.web import WebApp, home_page
+
+    app = WebApp(lambda: (REGIONS, []), Branding("Jane Doe", linkedin_url="https://x.example/in/j"))
+    page = home_page(app)
+    assert 'class="brand"' in page
+    assert 'href="https://x.example/in/j" target="_blank" rel="noopener noreferrer"' in page

@@ -1,19 +1,19 @@
-"""`cwf web`: a small local page. Enter an organization name, click Scan, see the waste report,
-download it as PDF or HTML. Python standard library only; meant for your own machine.
+"""`cwf web`: a small local page. Enter a company name, click Scan, see the waste report and
+download it as a PDF. Python standard library only; meant for your own machine.
 """
 
 import re
 import threading
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import UTC, datetime
 from html import escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlsplit
 
 from cost_waste_finder.branding import Branding
-from cost_waste_finder.html_report import page, prepared_by_html, render_html, report_body
+from cost_waste_finder.html_report import format_scanned, page, report_body
 from cost_waste_finder.models import Finding
 from cost_waste_finder.pdf_report import render_pdf
 from cost_waste_finder.pdf_report import report_title as pdf_title
@@ -25,23 +25,27 @@ MAX_NAME_LENGTH = 80
 LOCAL_HOSTS = {"localhost", "127.0.0.1", "[::1]"}
 
 WEB_CSS = """
-form.scan { display: flex; gap: 10px; flex-wrap: wrap; margin: 8px 0 24px; }
-form.scan input {
-  flex: 1 1 260px; padding: 10px 12px; font: inherit; color: var(--text);
-  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
-}
-.button {
-  padding: 10px 18px; font: inherit; font-weight: 600; border-radius: 8px; cursor: pointer;
-  border: 1px solid var(--accent); background: var(--accent); color: var(--bg);
-  text-decoration: none; display: inline-block;
-}
-.button.secondary { background: transparent; color: var(--accent); }
-.button[disabled] { opacity: 0.6; cursor: wait; }
-.actions { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 20px; }
-.error {
-  border: 1px solid #b42318; color: #b42318; border-radius: 8px; padding: 12px 14px;
-  margin-bottom: 20px;
-}
+.scan-card { background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  padding: 20px; margin: -52px 0 28px; position: relative;
+  box-shadow: 0 10px 30px rgba(49, 46, 129, 0.12); }
+.scan-card label { display: block; font-weight: 700; margin-bottom: 8px; }
+form.scan { display: flex; gap: 10px; flex-wrap: wrap; }
+form.scan input { flex: 1 1 260px; padding: 12px 14px; font: inherit; font-size: 16px;
+  color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 10px; }
+form.scan input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+.hint { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.button { padding: 12px 22px; font: inherit; font-weight: 700; border-radius: 10px;
+  cursor: pointer; border: none; background: var(--accent); color: #fff; text-decoration: none;
+  display: inline-flex; align-items: center; gap: 8px; }
+@media (prefers-color-scheme: dark) { .button { color: #1e1b4b; } }
+.button:hover { filter: brightness(1.08); }
+.button[disabled] { opacity: 0.7; cursor: wait; }
+.report-head { display: flex; justify-content: space-between; align-items: end; gap: 16px;
+  flex-wrap: wrap; margin: 8px 0 8px; }
+.report-head h2 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+.report-head .meta { margin: 4px 0 0; }
+.error { border: 1px solid #f04438; background: #fef3f2; color: #b42318; border-radius: 12px;
+  padding: 12px 14px; margin-bottom: 20px; }
 """
 
 # Only for the local page (never in the downloadable report): show progress while scanning.
@@ -59,7 +63,7 @@ class Report:
     organization: str
     regions: list[str]
     findings: list[Finding]
-    scanned_on: date = field(default_factory=date.today)
+    scanned_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
 
 class WebApp:
@@ -89,10 +93,10 @@ def clean_name(raw: str) -> str:
 
 
 def file_stem(report: Report) -> str:
-    """e.g. "example-client-aws-waste-report-2026-10-07"."""
+    """e.g. "example-client-aws-cost-waste-report-2026-10-07"."""
     slug = re.sub(r"[^a-z0-9]+", "-", report.organization.lower()).strip("-")
     prefix = f"{slug}-" if slug else ""
-    return f"{prefix}aws-waste-report-{report.scanned_on.isoformat()}"
+    return f"{prefix}aws-cost-waste-report-{report.scanned_at.date().isoformat()}"
 
 
 def report_title(report: Report | None) -> str:
@@ -103,23 +107,33 @@ def home_page(app: WebApp) -> str:
     report = app.report
     name = escape(report.organization) if report else ""
     body = f"""
-  <p class="meta">Read-only scan of every enabled region in this AWS account.</p>
-  <form class="scan" method="post" action="/scan">
-    <input name="organization" maxlength="{MAX_NAME_LENGTH}" placeholder="Company name"
-      value="{name}" aria-label="Company name">
-    <button class="button" type="submit">Scan</button>
-  </form>"""
+  <section class="scan-card">
+    <form class="scan" method="post" action="/scan">
+      <input id="organization" name="organization" maxlength="{MAX_NAME_LENGTH}"
+        placeholder="Company name, e.g. Acme Pty Ltd" value="{name}" aria-label="Company name">
+      <button class="button" type="submit">Scan</button>
+    </form>
+    <p class="hint">Read-only scan of every enabled region in this AWS account.</p>
+  </section>"""
     if app.error:
         body += f'\n  <div class="error">Scan failed: {escape(app.error)}</div>'
     if report:
-        details = report_body(report.findings, report.regions, report.scanned_on)
         body += f"""
-  <div class="actions">
-    <a class="button" href="/report.pdf">Download PDF</a>
-    <a class="button secondary" href="/report.html">Download HTML</a>
-  </div>
-  <h2>{escape(report_title(report))}</h2>{prepared_by_html(app.branding)}{details}"""
-    return page("AWS waste audit", body, extra_css=WEB_CSS, script=SCAN_SCRIPT)
+  <div class="report-head">
+    <div>
+      <h2>{escape(report_title(report))}</h2>
+      <p class="meta">Scanned: {format_scanned(report.scanned_at)}</p>
+    </div>
+    <a class="button" href="/report.pdf">&#11015; Download PDF</a>
+  </div>{report_body(report.findings, report.regions)}"""
+    return page(
+        "AWS Cost Waste Audit",
+        body,
+        subtitle="Find unused and idle AWS resources and what they cost each month.",
+        branding=app.branding,
+        extra_css=WEB_CSS,
+        script=SCAN_SCRIPT,
+    )
 
 
 def make_handler(app: WebApp, allowed_hosts: set[str]):
@@ -132,32 +146,17 @@ def make_handler(app: WebApp, allowed_hosts: set[str]):
             path = urlsplit(self.path).path
             if path == "/":
                 self._send(HTTPStatus.OK, "text/html; charset=utf-8", home_page(app).encode())
-            elif path in ("/report.pdf", "/report.html") and app.report is None:
+            elif path == "/report.pdf" and app.report is None:
                 self._redirect("/")
             elif path == "/report.pdf":
                 pdf = render_pdf(
                     app.report.findings,
                     app.report.regions,
                     app.report.organization,
-                    app.report.scanned_on,
+                    app.report.scanned_at,
                     branding=app.branding,
                 )
                 self._send(HTTPStatus.OK, "application/pdf", pdf, f"{file_stem(app.report)}.pdf")
-            elif path == "/report.html":
-                report = app.report
-                html = render_html(
-                    report.findings,
-                    report.regions,
-                    report.scanned_on,
-                    report_title(report),
-                    app.branding,
-                )
-                self._send(
-                    HTTPStatus.OK,
-                    "text/html; charset=utf-8",
-                    html.encode(),
-                    f"{file_stem(app.report)}.html",
-                )
             else:
                 self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
 

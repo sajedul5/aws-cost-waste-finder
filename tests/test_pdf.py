@@ -25,15 +25,16 @@ def test_pdf_has_title_total_and_rows() -> None:
 
     assert pdf.startswith(b"%PDF-")
     assert "Example Client - AWS Cost Waste Report" in content
-    assert "$47.11/month" in content
-    assert "$565.32/year" in content
+    assert "$47.11/mo" in content
+    assert "$565.32" in content  # per year
+    assert "Scanned: 2026-10-07" in content
     assert content.index("nat-0ccc3333dddd4444e") < content.index("snap-0aaa1111bbbb2222c")
     assert "have no price (n/a)" not in content  # parentheses are escaped in PDF text
     assert "have no price" in content
 
 
 def test_pdf_without_findings() -> None:
-    assert "No waste found." in text(render_pdf([], REGIONS, "", DAY, compress=False))
+    assert "No waste found" in text(render_pdf([], REGIONS, "", DAY, compress=False))
 
 
 def test_pdf_many_findings_spans_pages() -> None:
@@ -59,13 +60,14 @@ def test_prepared_by_block_with_links() -> None:
     )
     content = text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False, branding=branding))
 
-    assert "Prepared by" in content
+    assert "PREPARED BY" in content
     assert "Jane Doe" in content and "DevOps Engineer" in content
     assert "/URI (mailto:jane@example.com)" in content
     assert "/URI (https://www.linkedin.com/in/jane-doe/)" in content
-    assert "LinkedIn: linkedin.com/in/jane-doe" in content
+    assert "(LinkedIn) Tj" in content  # shown as a word, not the URL
+    assert "linkedin.com/in/jane-doe) Tj" not in content
     assert "/Author (Jane Doe)" in content
 
 
 def test_no_prepared_by_without_branding() -> None:
-    assert "Prepared by" not in text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False))
+    assert "PREPARED BY" not in text(render_pdf(findings(), REGIONS, "Acme", DAY, compress=False))

@@ -58,7 +58,7 @@ def test_html_report() -> None:
     page = render_html(findings(), REGIONS, DAY)
 
     assert page.startswith("<!doctype html>")
-    assert "$47.11/month" in page
+    assert "$47.11/mo" in page
     assert page.index("nat-0ccc3333dddd4444e") < page.index("snap-0aaa1111bbbb2222c")
     assert "1 finding(s) have no price" in page
     assert "prefers-color-scheme: dark" in page
@@ -98,7 +98,7 @@ def test_cli_writes_output_file(monkeypatch: pytest.MonkeyPatch, tmp_path) -> No
     assert result.exit_code == 0, result.output
     assert result.stdout == ""
     assert f"Report written to {target}" in result.stderr
-    assert "$47.11/month" in target.read_text()
+    assert "$47.11/mo" in target.read_text()
 
 
 def test_cli_prints_chosen_format(monkeypatch: pytest.MonkeyPatch) -> None:
