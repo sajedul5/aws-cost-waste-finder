@@ -45,6 +45,27 @@ def test_finds_instance_stopped_longer_than_threshold() -> None:
 
 
 @mock_aws
+def test_volume_details_include_ids() -> None:
+    session = boto3.Session(region_name=REGION)
+    launch(session, extra_gib=100)
+
+    finding = stopped_ec2.check(session, REGION, Thresholds(), now=days_later(31))[0]
+
+    assert all(v["volume_id"].startswith("vol-") for v in finding.details["volumes"])
+
+
+@mock_aws
+def test_several_instances_share_one_volume_lookup() -> None:
+    session = boto3.Session(region_name=REGION)
+    ids = {launch(session, extra_gib=10), launch(session, extra_gib=20)}
+
+    findings = stopped_ec2.check(session, REGION, Thresholds(), now=days_later(31))
+
+    assert {f.resource_id for f in findings} == ids
+    assert sorted(sum(v["size_gib"] for v in f.details["volumes"]) for f in findings) == [18, 28]
+
+
+@mock_aws
 def test_ignores_recently_stopped_instance() -> None:
     session = boto3.Session(region_name=REGION)
     launch(session)

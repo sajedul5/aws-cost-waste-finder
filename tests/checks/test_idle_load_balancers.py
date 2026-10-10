@@ -70,9 +70,19 @@ def test_alb_without_targets_is_idle() -> None:
 
     finding = findings[short_id(lb)]
     assert finding.check == "idle-load-balancer"
-    assert finding.reason == "ALB with no registered targets"
+    assert finding.reason == "ALB with no registered targets and 0 requests in 14 days"
     assert finding.details == {"kind": "application"}
     assert short_id(lb).startswith("app/empty-alb/")  # readable ID, no ARN or account ID
+
+
+@mock_aws
+def test_busy_alb_without_targets_is_not_idle() -> None:
+    """e.g. an ALB that only redirects HTTP -> HTTPS: no targets, but still in use."""
+    session = boto3.Session(region_name=REGION)
+    lb = create_lb(session, "redirect-alb")
+    put_requests(session, lb, per_day=1000)
+
+    assert short_id(lb) not in run(session)
 
 
 @mock_aws
@@ -105,7 +115,7 @@ def test_nlb_without_targets_is_idle() -> None:
 
     finding = run(session)[short_id(lb)]
 
-    assert finding.reason == "NLB with no registered targets"
+    assert finding.reason == "NLB with no registered targets and 0 new flows in 14 days"
     assert finding.details == {"kind": "network"}
 
 
@@ -137,7 +147,10 @@ def test_classic_elb() -> None:
 
     findings = run(session)
 
-    assert findings["empty-clb"].reason == "Classic ELB with no registered targets"
+    assert (
+        findings["empty-clb"].reason
+        == "Classic ELB with no registered targets and 0 requests in 14 days"
+    )
     assert findings["empty-clb"].details == {"kind": "classic"}
     assert "busy-clb" not in findings
 

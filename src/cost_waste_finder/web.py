@@ -45,8 +45,8 @@ form.scan input:focus { outline: none; border-color: var(--link); }
   flex-wrap: wrap; margin: 32px 0 4px; border-top: 1px solid var(--border); padding-top: 24px; }
 .report-head h2 { margin: 0; font-size: 24px; }
 .report-head .meta { margin: 2px 0 0; }
-.error { border: 1px solid #d91515; border-left-width: 4px; background: #fff7f7;
-  color: #d91515; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
+.error { border: 1px solid var(--error); border-left-width: 4px; background: var(--error-bg);
+  color: var(--error); border-radius: 8px; padding: 12px 16px; margin: 16px 0; }
 """
 
 # Only for the local page (never in the downloadable report): show progress while scanning.
@@ -171,14 +171,20 @@ def make_handler(app: WebApp, allowed_hosts: set[str]):
             if urlsplit(self.path).path != "/scan":
                 self._send(HTTPStatus.NOT_FOUND, "text/plain; charset=utf-8", b"Not found")
                 return
-            length = min(int(self.headers.get("Content-Length") or 0), 10_000)
+            try:
+                length = min(int(self.headers.get("Content-Length") or 0), 10_000)
+            except ValueError:
+                self._send(HTTPStatus.BAD_REQUEST, "text/plain; charset=utf-8", b"Bad request")
+                return
             form = parse_qs(self.rfile.read(length).decode("utf-8", "replace"))
             app.run_scan(clean_name(form.get("organization", [""])[0]))
             self._redirect("/")
 
         def _host_ok(self) -> bool:
             """Refuse requests for other host names (protects against DNS rebinding)."""
-            host = (self.headers.get("Host") or "").rsplit(":", 1)[0].lower()
+            host = (self.headers.get("Host") or "").lower()
+            if not host.endswith("]"):  # a bare "[::1]" has no port to strip
+                host = host.rsplit(":", 1)[0]
             if host in allowed_hosts:
                 return True
             self._send(HTTPStatus.FORBIDDEN, "text/plain; charset=utf-8", b"Forbidden host")

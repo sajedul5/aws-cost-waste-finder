@@ -63,3 +63,10 @@ def test_large_numbers_use_thousands_separator() -> None:
 def test_multi_region_header() -> None:
     report = render_markdown([], ["ap-southeast-1", "ap-southeast-2"], DAY)
     assert "Regions (2): ap-southeast-1, ap-southeast-2 · Scanned: 2026-01-15" in report
+
+
+def test_markdown_verify_note() -> None:
+    lb = Finding("idle-load-balancer", "app/x/1", "ap-southeast-1", "ALB idle", {}, 18.4)
+    report = render_markdown([lb], ["ap-southeast-1"], date(2026, 1, 15))
+    assert "ALB idle (verify before deleting)" in report
+    assert "confirm with the resource owner" in report

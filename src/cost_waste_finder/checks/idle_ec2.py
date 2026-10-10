@@ -13,6 +13,23 @@ BYTES_PER_MB = 1024**2
 # Days of data that may be missing at the window edges and still count as "enough history".
 MISSING_DAYS_ALLOWED = 1
 
+# EC2 PlatformDetails -> Pricing API (operatingSystem, preInstalledSw). Anything else (e.g. BYOL)
+# isn't priced: a Linux price for a RHEL or SQL Server instance would under-state the saving.
+PLATFORMS = {
+    "Linux/UNIX": ("Linux", "NA"),
+    "Red Hat Enterprise Linux": ("RHEL", "NA"),
+    "Red Hat Enterprise Linux with HA": ("Red Hat Enterprise Linux with HA", "NA"),
+    "SUSE Linux": ("SUSE", "NA"),
+    "Ubuntu Pro": ("Ubuntu Pro", "NA"),
+    "Windows": ("Windows", "NA"),
+    "Windows with SQL Server Web": ("Windows", "SQL Web"),
+    "Windows with SQL Server Standard": ("Windows", "SQL Std"),
+    "Windows with SQL Server Enterprise": ("Windows", "SQL Ent"),
+    "Linux/UNIX with SQL Server Web": ("Linux", "SQL Web"),
+    "Linux/UNIX with SQL Server Standard": ("Linux", "SQL Std"),
+    "Linux/UNIX with SQL Server Enterprise": ("Linux", "SQL Ent"),
+}
+
 
 def check(
     session: boto3.Session, region: str, thresholds: Thresholds, now: datetime | None = None
@@ -57,6 +74,7 @@ def _idle_finding(
         return None
 
     instance_type = instance["InstanceType"]
+    operating_system, software = platform(instance)
     return Finding(
         check=CHECK_ID,
         resource_id=instance["InstanceId"],
@@ -67,6 +85,15 @@ def _idle_finding(
         ),
         details={
             "instance_type": instance_type,
-            "operating_system": "Windows" if instance.get("Platform") == "windows" else "Linux",
+            "operating_system": operating_system,
+            "software": software,
         },
     )
+
+
+def platform(instance: dict) -> tuple[str | None, str]:
+    """(Pricing API operatingSystem or None if unknown, preInstalledSw)."""
+    details = instance.get("PlatformDetails")
+    if details is None:  # older API responses: only Windows is marked
+        return ("Windows" if instance.get("Platform") == "windows" else "Linux"), "NA"
+    return PLATFORMS.get(details, (None, "NA"))

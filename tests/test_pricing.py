@@ -1,4 +1,5 @@
 import json
+import threading
 
 import boto3
 import pytest
@@ -271,7 +272,11 @@ def hourly_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         PricingClient,
         "ec2_instance_hourly_price",
-        lambda self, r, t, os="Linux": {"Linux": 0.0132, "Windows": 0.0224}[os],
+        lambda self, r, t, os="Linux", sw="NA": {
+            ("Linux", "NA"): 0.0132,
+            ("Windows", "NA"): 0.0224,
+            ("Windows", "SQL Std"): 0.1424,
+        }[(os, sw)],
     )
     monkeypatch.setattr(PricingClient, "nat_gateway_hourly_price", lambda self, r: 0.059)
     monkeypatch.setattr(
@@ -286,17 +291,23 @@ def hourly_prices(monkeypatch: pytest.MonkeyPatch) -> None:
     [
         ("idle-ec2", {"instance_type": "t3.micro", "operating_system": "Linux"}, 9.64),
         ("idle-ec2", {"instance_type": "t3.micro", "operating_system": "Windows"}, 16.35),
+        (
+            "idle-ec2",
+            {"instance_type": "t3.micro", "operating_system": "Windows", "software": "SQL Std"},
+            103.95,
+        ),
+        ("idle-ec2", {"instance_type": "t3.micro", "operating_system": None}, None),
         ("idle-nat-gateway", {}, 43.07),
         ("idle-load-balancer", {"kind": "application"}, 18.40),
         ("idle-load-balancer", {"kind": "classic"}, 20.44),
     ],
 )
 def test_hourly_costs(
-    pricing: PricingClient, hourly_prices: None, check: str, details: dict, expected: float
+    pricing: PricingClient, hourly_prices: None, check: str, details: dict, expected: float | None
 ) -> None:
     finding = finding_for(check, **details)
     apply_costs([finding], pricing)
-    assert finding.monthly_cost == pytest.approx(expected)
+    assert finding.monthly_cost == (None if expected is None else pytest.approx(expected))
 
 
 def test_stopped_ec2_cost(pricing: PricingClient, singapore_prices: None) -> None:
@@ -304,3 +315,63 @@ def test_stopped_ec2_cost(pricing: PricingClient, singapore_prices: None) -> Non
     finding = finding_for("stopped-ec2", volumes=volumes, stopped_days=40)
     apply_costs([finding], pricing)
     assert finding.monthly_cost == pytest.approx(100 * 0.096 + 8 * 0.12)
+
+
+def test_gp3_iops_price_skips_throughput(pricing: PricingClient) -> None:
+    request = {
+        "ServiceCode": "AmazonEC2",
+        "Filters": [
+            {"Type": "TERM_MATCH", "Field": "productFamily", "Value": "System Operation"},
+            {"Type": "TERM_MATCH", "Field": "volumeApiName", "Value": "gp3"},
+            {"Type": "TERM_MATCH", "Field": "location", "Value": "Asia Pacific (Singapore)"},
+        ],
+        "MaxResults": 100,
+    }
+    products = [
+        priced_item("APS1-EBS:VolumeP-Throughput.gp3", "0.048"),
+        priced_item("APS1-EBS:VolumeP-IOPS.gp3", "0.006"),
+    ]
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": products}, request)
+        assert pricing.gp3_iops_price(REGION) == pytest.approx(0.006)
+
+
+def test_get_price_follows_next_token(pricing: PricingClient) -> None:
+    first, second = ebs_request("gp2"), {**ebs_request("gp2"), "NextToken": "page-2"}
+    with Stubber(pricing._client) as stub:
+        stub.add_response("get_products", {"PriceList": [], "NextToken": "page-2"}, first)
+        stub.add_response("get_products", {"PriceList": [price_item("0.12")]}, second)
+        assert pricing.ebs_storage_price(REGION, "gp2") == pytest.approx(0.12)
+        stub.assert_no_pending_responses()
+
+
+def test_slow_lookup_does_not_block_other_prices(monkeypatch: pytest.MonkeyPatch) -> None:
+    """While one thread waits on the API, another thread can still fetch a different price."""
+    pricing = PricingClient(boto3.Session(region_name=REGION))
+    slow_started, fast_done = threading.Event(), threading.Event()
+    calls = []
+
+    def fetch(self, service, filters, usagetype):
+        calls.append(filters["volumeApiName"])
+        if filters["volumeApiName"] == "gp2":
+            slow_started.set()
+            assert fast_done.wait(timeout=5), "gp3 lookup was blocked by the gp2 lookup"
+        return 0.1
+
+    monkeypatch.setattr(PricingClient, "_fetch_price", fetch)
+    slow = threading.Thread(target=pricing.ebs_storage_price, args=(REGION, "gp2"))
+    slow.start()
+    assert slow_started.wait(timeout=5)
+    pricing.ebs_storage_price(REGION, "gp3")
+    fast_done.set()
+    slow.join()
+
+    # Same price again, from several threads: still one API call per price.
+    threads = [
+        threading.Thread(target=pricing.ebs_storage_price, args=(REGION, "gp2")) for _ in range(5)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert sorted(calls) == ["gp2", "gp3"]

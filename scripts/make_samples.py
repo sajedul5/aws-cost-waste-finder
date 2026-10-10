@@ -69,7 +69,7 @@ FINDINGS = [
         "idle-load-balancer",
         "app/old-api/1a2b3c4d5e6f7a8b",
         "us-east-1",
-        "ALB with no registered targets",
+        "ALB with no registered targets and 0 requests in 14 days",
         {},
         16.43,
     ),

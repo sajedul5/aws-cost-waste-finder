@@ -1,4 +1,7 @@
-"""Self-contained HTML report: inline CSS, no scripts, no external links. Safe to email.
+"""Self-contained HTML report: inline CSS, no scripts, nothing loaded from the web. Safe to email.
+
+The only link is the optional "Prepared by" LinkedIn/email from the user's own branding.
+`page()` can take a script, but only the local `cwf web` page passes one, never the report.
 
 The look follows the AWS console and documentation (navy top bar, orange buttons, plain tables).
 No AWS logo is used: this is not an official AWS document.
@@ -13,8 +16,10 @@ from cost_waste_finder.report import (
     format_cost,
     plural,
     regions_label,
+    report_reason,
     sort_by_savings,
     total_savings,
+    verify_note,
 )
 
 PRODUCT = "AWS Cost Waste Audit"
@@ -26,12 +31,13 @@ CSS = """
 :root {
   --bg: #ffffff; --text: #000716; --muted: #5f6b7a; --border: #e9ebed; --head: #fafafa;
   --nav: #232f3e; --orange: #ff9900; --orange-hover: #ec7211; --link: #0972d3;
-  --info-bg: #f2f8fd; --money: #037f0c; --code: #f4f4f4;
+  --info-bg: #f2f8fd; --money: #037f0c; --code: #f4f4f4; --error: #d91515; --error-bg: #fff7f7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #0f1b2a; --text: #d1d5db; --muted: #8d99a8; --border: #414d5c; --head: #192534;
     --nav: #16191f; --link: #539fe5; --info-bg: #00142b; --money: #29ad32; --code: #192534;
+    --error: #ff7a7a; --error-bg: #2a0f14;
   }
 }
 * { box-sizing: border-box; }
@@ -192,7 +198,7 @@ def report_body(findings: list[Finding], regions: list[str]) -> str:
     <tfoot><tr><td colspan="4">Total ({plural(len(findings), "finding")})</td>
       <td class="num">{format_cost(total)}</td></tr></tfoot>
   </table>
-  </div>{_unpriced_note(findings)}"""
+  </div>{_notes(findings)}"""
 
 
 def _rows(findings: list[Finding]) -> str:
@@ -203,16 +209,18 @@ def _rows(findings: list[Finding]) -> str:
             f"<td><code>{escape(f.check)}</code></td>"
             f'<td class="id">{escape(f.resource_id)}</td>'
             f'<td class="nowrap">{escape(f.region)}</td>'
-            f"<td>{escape(f.reason)}</td>"
+            f"<td>{escape(report_reason(f))}</td>"
             f'<td class="num">{format_cost(f.monthly_cost)}</td>'
             "</tr>"
         )
     return "\n".join(rows)
 
 
-def _unpriced_note(findings: list[Finding]) -> str:
+def _notes(findings: list[Finding]) -> str:
+    notes = []
     unpriced = sum(1 for f in findings if f.monthly_cost is None)
-    if not unpriced:
-        return ""
-    text = f"{unpriced} finding(s) have no price (n/a) and are not in the total."
-    return f'\n  <p class="note">{text}</p>'
+    if unpriced:
+        notes.append(f"{unpriced} finding(s) have no price (n/a) and are not in the total.")
+    if note := verify_note(findings):
+        notes.append(note)
+    return "".join(f'\n  <p class="note">{escape(text)}</p>' for text in notes)

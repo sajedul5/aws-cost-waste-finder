@@ -38,13 +38,16 @@ def location_name(region: str) -> str:
 class PricingClient:
     """Looks up on-demand USD prices. Each distinct lookup hits the API once per run.
 
-    Safe to share between threads: the lock makes parallel region scans reuse one cache.
+    Safe to share between threads: parallel region scans reuse one cache. Each lookup has its
+    own lock, so threads wait only for a price someone else is already fetching, not for every
+    API call in flight.
     """
 
     def __init__(self, session: boto3.Session) -> None:
         self._client = session.client("pricing", region_name=PRICING_REGION)
         self._cache: dict[tuple, float | None] = {}
-        self._lock = threading.Lock()
+        self._key_locks: dict[tuple, threading.Lock] = {}
+        self._lock = threading.Lock()  # guards the two dicts, never held during an API call
 
     def get_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None = None
@@ -57,30 +60,42 @@ class PricingClient:
         """
         key = (service_code, tuple(sorted(filters.items())), usagetype)
         with self._lock:
-            if key not in self._cache:
-                self._cache[key] = self._fetch_price(service_code, filters, usagetype)
-            return self._cache[key]
+            if key in self._cache:
+                return self._cache[key]
+            key_lock = self._key_locks.setdefault(key, threading.Lock())
+        with key_lock:
+            with self._lock:
+                if key in self._cache:  # another thread fetched it while we waited
+                    return self._cache[key]
+            price = self._fetch_price(service_code, filters, usagetype)
+            with self._lock:
+                self._cache[key] = price
+            return price
 
     def _fetch_price(
         self, service_code: str, filters: dict[str, str], usagetype: str | None
     ) -> float | None:
-        response = self._client.get_products(
-            ServiceCode=service_code,
-            Filters=[
+        params = {
+            "ServiceCode": service_code,
+            "Filters": [
                 {"Type": "TERM_MATCH", "Field": field, "Value": value}
                 for field, value in filters.items()
             ],
-            MaxResults=100,
-        )
-        for item in response["PriceList"]:
-            product = json.loads(item)
-            attributes = product.get("product", {}).get("attributes", {})
-            if usagetype and not _usagetype_matches(attributes.get("usagetype", ""), usagetype):
-                continue
-            price = _on_demand_usd(product)
-            if price:
-                return price
-        return None
+            "MaxResults": 100,
+        }
+        while True:
+            response = self._client.get_products(**params)
+            for item in response["PriceList"]:
+                product = json.loads(item)
+                attributes = product.get("product", {}).get("attributes", {})
+                if usagetype and not _usagetype_matches(attributes.get("usagetype", ""), usagetype):
+                    continue
+                price = _on_demand_usd(product)
+                if price:
+                    return price
+            if not response.get("NextToken"):
+                return None
+            params["NextToken"] = response["NextToken"]
 
     def ebs_storage_price(self, region: str, volume_type: str) -> float | None:
         """USD per GB-month of EBS storage for a volume type (gp2, gp3, io1, ...)."""
@@ -102,6 +117,8 @@ class PricingClient:
                 "volumeApiName": "gp3",
                 "location": location_name(region),
             },
+            # Pinned so a future price-list change can't return the throughput price instead.
+            usagetype="EBS:VolumeP-IOPS.gp3",
         )
 
     def snapshot_price(self, region: str, archive: bool = False) -> float | None:
@@ -126,9 +143,9 @@ class PricingClient:
         )
 
     def ec2_instance_hourly_price(
-        self, region: str, instance_type: str, operating_system: str = "Linux"
+        self, region: str, instance_type: str, operating_system: str = "Linux", software: str = "NA"
     ) -> float | None:
-        """USD per hour, on-demand, shared tenancy, no pre-installed software."""
+        """USD per hour, on-demand, shared tenancy. software is e.g. "NA" or "SQL Std"."""
         return self.get_price(
             "AmazonEC2",
             {
@@ -136,7 +153,7 @@ class PricingClient:
                 "instanceType": instance_type,
                 "operatingSystem": operating_system,
                 "tenancy": "Shared",
-                "preInstalledSw": "NA",
+                "preInstalledSw": software,
                 "capacitystatus": "Used",
                 "licenseModel": "No License required",
                 "location": location_name(region),
@@ -211,8 +228,14 @@ def _gp2_to_gp3_savings(finding: Finding, pricing: PricingClient) -> float | Non
 
 def _idle_ec2_cost(finding: Finding, pricing: PricingClient) -> float | None:
     # Compute only: the instance's EBS volumes keep costing money if it is just stopped.
+    operating_system = finding.details["operating_system"]
+    if operating_system is None:
+        return None  # platform we can't price (e.g. BYOL): n/a rather than a wrong number
     price = pricing.ec2_instance_hourly_price(
-        finding.region, finding.details["instance_type"], finding.details["operating_system"]
+        finding.region,
+        finding.details["instance_type"],
+        operating_system,
+        finding.details.get("software", "NA"),
     )
     return None if price is None else round(price * HOURS_PER_MONTH, 2)
 

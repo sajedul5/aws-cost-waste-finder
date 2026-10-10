@@ -5,7 +5,7 @@
       "Sid": "AllowCwfScanFromConsultantAccount",
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::<CONSULTANT-ACCOUNT-ID>:root"
+        "AWS": "arn:aws:iam::<CONSULTANT-ACCOUNT-ID>:role/<CONSULTANT-ROLE-NAME>"
       },
       "Action": "sts:AssumeRole",
       "Condition": {

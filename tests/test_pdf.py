@@ -32,6 +32,7 @@ def test_pdf_has_title_total_and_rows() -> None:
     assert content.index("nat-0ccc3333dddd4444e") < content.index("snap-0aaa1111bbbb2222c")
     assert "have no price (n/a)" not in content  # parentheses are escaped in PDF text
     assert "have no price" in content
+    assert "confirm with the resource owner" in content  # old-snapshot is a heuristic check
 
 
 def test_pdf_without_findings() -> None:

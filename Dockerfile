@@ -14,9 +14,13 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
+# Pinned, hash-checked dependencies (requirements.lock, made with pip-compile; see docs/decisions.md)
+# then cwf itself without pulling anything else.
+COPY requirements.lock ./
+RUN pip install --require-hashes -r requirements.lock
 COPY pyproject.toml README.md ./
 COPY src ./src
-RUN pip install . && rm -rf /app
+RUN pip install --no-deps . && rm -rf /app
 
 RUN useradd --create-home --uid 1000 cwf && mkdir /reports && chown cwf /reports
 USER cwf

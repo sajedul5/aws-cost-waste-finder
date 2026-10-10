@@ -1,4 +1,4 @@
-"""Check: load balancers with no targets, or almost no traffic over the lookback period."""
+"""Check: load balancers with almost no traffic over the lookback period (targets or not)."""
 
 from datetime import UTC, datetime, timedelta
 
@@ -76,9 +76,9 @@ def _has_targets(elbv2, lb: dict) -> bool:
 def _idle_reason(
     cloudwatch, kind: str, dimension: str, has_targets: bool, thresholds: Thresholds, now
 ) -> str | None:
+    # Traffic is always checked: an ALB with no targets can still be busy with redirects
+    # (HTTP -> HTTPS) or fixed responses, and deleting it would break the site.
     namespace, metric, label, unit = TRAFFIC_METRICS[kind]
-    if not has_targets:
-        return f"{label} with no registered targets"
     dimension_name = "LoadBalancerName" if kind == "classic" else "LoadBalancer"
     days = thresholds.lookback_days
     traffic = sum(
@@ -86,4 +86,6 @@ def _idle_reason(
     )
     if traffic >= thresholds.lb_requests:
         return None
+    if not has_targets:
+        return f"{label} with no registered targets and {traffic:.0f} {unit} in {days} days"
     return f"{label} with {traffic:.0f} {unit} in {days} days"

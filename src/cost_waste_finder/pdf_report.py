@@ -16,8 +16,10 @@ from cost_waste_finder.report import (
     format_cost,
     plural,
     regions_label,
+    report_reason,
     sort_by_savings,
     total_savings,
+    verify_note,
 )
 
 NAVY = (35, 47, 62)  # #232f3e
@@ -123,7 +125,7 @@ def render_pdf(
                     safe(f.check),
                     safe(f.resource_id),
                     safe(f.region),
-                    safe(f.reason),
+                    safe(report_reason(f)),
                     format_cost(f.monthly_cost),
                 ]
             )
@@ -131,11 +133,16 @@ def render_pdf(
         total_row.cell(f"Total ({plural(len(findings), 'finding')})", colspan=4)
         total_row.cell(format_cost(total))
 
+    notes = []
     unpriced = sum(1 for f in findings if f.monthly_cost is None)
     if unpriced:
+        notes.append(f"{unpriced} finding(s) have no price (n/a) and are not in the total.")
+    if note := verify_note(findings):
+        notes.append(note)
+    pdf.set_text_color(*MUTED)
+    for text in notes:
         pdf.ln(3)
-        pdf.set_text_color(*MUTED)
-        pdf.cell(0, 5, f"{unpriced} finding(s) have no price (n/a) and are not in the total.")
+        pdf.multi_cell(0, 5, safe(text), new_x="LMARGIN", new_y="NEXT")
     return bytes(pdf.output())
 
 

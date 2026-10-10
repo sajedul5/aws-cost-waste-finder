@@ -37,6 +37,7 @@ Details: @docs/architecture.md @docs/checks.md @docs/decisions.md
 - [x] 11. Waste audit only: remove `cwf bill` and `cwf dashboard`; no Cost Explorer
 - [x] 12. `cwf web`: local page (organization name + Scan), waste report, Download PDF; Docker
 - [x] 13. README polish, examples/sample-report.md (fake IDs), architecture diagram
+- [x] 14. Accuracy fixes from review: no double count, LB traffic, backup snapshots, retries, verify notes, lockfile
 
 ## Commands
 ```sh
