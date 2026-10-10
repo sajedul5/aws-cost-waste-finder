@@ -34,16 +34,17 @@ free, without giving a vendor admin access to their account.
 | Check | What it finds | Typical saving |
 |---|---|---|
 | `unattached-ebs` | Disks not attached to any server | The full disk price (e.g. 500 GiB gp2 ≈ $57/month) |
-| `old-snapshot` | Backups older than 90 days that no server image uses | $0.05 per GB per month |
+| `old-snapshot` | Backups older than 90 days that no server image uses (AWS Backup and DLM backups are skipped) | $0.05 per GB per month |
 | `unattached-eip` | Public IP addresses not in use | $3.65/month each |
 | `gp2-to-gp3` | Disks on the older gp2 type | About 20% of the disk price, no downtime |
 | `idle-ec2` | Servers running but doing nothing (CPU < 5%, almost no network, 14 days) | The full server price |
 | `idle-nat-gateway` | NAT Gateways with almost no traffic | About $33–43/month each |
-| `idle-load-balancer` | Load balancers with no targets or almost no requests | About $16–20/month each |
+| `idle-load-balancer` | Load balancers with almost no requests (with or without targets) | About $16–20/month each |
 | `stopped-ec2` | Servers stopped for more than 30 days that still pay for their disks | The disk price |
 
 Every region enabled in the account is scanned. Prices come from the AWS Pricing API for each region.
-All thresholds (14 days, 5% CPU, 90 days…) can be changed.
+Each dollar is counted once: a gp2 disk on a long-stopped server is in `stopped-ec2` only, not also in
+`gp2-to-gp3`. All thresholds (14 days, 5% CPU, 90 days…) can be changed.
 
 ## Sample report (PDF)
 
@@ -97,7 +98,7 @@ Keep this file private. It stays on your computer; it is never put inside the Do
 ### 4. Pull and run
 
 ```sh
-docker pull sajedul5/aws-cost-waste-finder:latest
+docker pull sajedul5/aws-cost-waste-finder:latest   # or a fixed version, e.g. :0.2.0
 docker run --rm --env-file .env -p 127.0.0.1:8080:8080 sajedul5/aws-cost-waste-finder web --host 0.0.0.0
 ```
 
@@ -158,6 +159,8 @@ can use, with an external ID. You then run `--role-arn arn:aws:iam::<CLIENT-ID>:
 - **Your keys stay with you.** Passed at run time from `.env`; never written to the image, the repo
   or the report. The web page only listens on your own computer (`127.0.0.1`).
 - **No account IDs or ARNs** in the reports.
+- **Pinned dependencies.** The Docker image installs hash-checked versions from `requirements.lock`,
+  and CI actions are pinned to commit SHAs.
 
 ## How it works
 
@@ -181,6 +184,10 @@ The diagram source is [`docs/architecture.drawio`](docs/architecture.drawio) (op
 - Data-transfer and request charges (NAT data, load balancer LCUs) are not counted, so real savings
   are often **higher**.
 - The tool finds waste; it does not fix it. Check with the owner before deleting anything.
+  Idle load balancers and old snapshots are marked **"verify before deleting"**: they are based on
+  traffic or age, and a wrong delete hurts most there.
+- If one region can't be reached or a permission is missing, that check is skipped with a warning
+  and the rest of the report is still produced.
 - AWS China and GovCloud are not supported.
 
 ## Development

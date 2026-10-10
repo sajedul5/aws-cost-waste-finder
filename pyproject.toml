@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "aws-cost-waste-finder"
-version = "0.1.0"
+version = "0.2.0"
 description = "Read-only CLI that finds wasted AWS spend and estimates monthly savings."
 readme = "README.md"
 requires-python = ">=3.11"
