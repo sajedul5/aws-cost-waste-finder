@@ -20,7 +20,7 @@ def check(
     ec2 = session.client("ec2", region_name=region)
     now = now or datetime.now(UTC)
 
-    findings = []
+    candidates = []  # (instance, days stopped, volume IDs)
     pages = ec2.get_paginator("describe_instances").paginate(
         Filters=[{"Name": "instance-state-name", "Values": ["stopped"]}]
     )
@@ -36,26 +36,46 @@ def check(
                     for m in instance.get("BlockDeviceMappings", [])
                     if "Ebs" in m
                 ]
-                if days <= thresholds.stopped_days or not volume_ids:
-                    continue
-                volumes = [
-                    {"volume_type": v["VolumeType"], "size_gib": v["Size"]}
-                    for v in ec2.describe_volumes(VolumeIds=volume_ids)["Volumes"]
-                ]
-                total_gib = sum(v["size_gib"] for v in volumes)
-                count = len(volumes)
-                findings.append(
-                    Finding(
-                        check=CHECK_ID,
-                        resource_id=instance["InstanceId"],
-                        region=region,
-                        reason=(
-                            f"{instance['InstanceType']} stopped {days} days, still paying for "
-                            f"{count} volume{'s' if count != 1 else ''} ({total_gib} GiB)"
-                        ),
-                        details={"volumes": volumes, "stopped_days": days},
-                    )
-                )
+                if days > thresholds.stopped_days and volume_ids:
+                    candidates.append((instance, days, volume_ids))
+    if not candidates:
+        return []
+
+    # One paginated call for every volume. A filter (not VolumeIds) so that a volume deleted
+    # during the scan is just missing instead of failing the whole call.
+    all_ids = [volume_id for _, _, ids in candidates for volume_id in ids]
+    volumes_by_id = {}
+    for start in range(0, len(all_ids), 200):
+        pages = ec2.get_paginator("describe_volumes").paginate(
+            Filters=[{"Name": "volume-id", "Values": all_ids[start : start + 200]}]
+        )
+        for page in pages:
+            for v in page["Volumes"]:
+                volumes_by_id[v["VolumeId"]] = {
+                    "volume_id": v["VolumeId"],
+                    "volume_type": v["VolumeType"],
+                    "size_gib": v["Size"],
+                }
+
+    findings = []
+    for instance, days, volume_ids in candidates:
+        volumes = [volumes_by_id[i] for i in volume_ids if i in volumes_by_id]
+        if not volumes:
+            continue
+        total_gib = sum(v["size_gib"] for v in volumes)
+        count = len(volumes)
+        findings.append(
+            Finding(
+                check=CHECK_ID,
+                resource_id=instance["InstanceId"],
+                region=region,
+                reason=(
+                    f"{instance['InstanceType']} stopped {days} days, still paying for "
+                    f"{count} volume{'s' if count != 1 else ''} ({total_gib} GiB)"
+                ),
+                details={"volumes": volumes, "stopped_days": days},
+            )
+        )
     return findings
 
 

@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import boto3
+import pytest
 from moto import mock_aws
 
 from cost_waste_finder.checks import CHECKS, old_snapshots
@@ -88,6 +89,44 @@ def test_ignores_snapshot_used_by_ami() -> None:
 
     assert unused in found
     assert used not in found
+
+
+@pytest.mark.parametrize(
+    ("description", "tags"),
+    [
+        ("This snapshot is created by the AWS Backup service.", []),
+        ("Created for policy: policy-0123456789abcdef0 schedule: Daily", []),
+        ("", [{"Key": "aws:backup:source-resource", "Value": "fake"}]),
+        ("", [{"Key": "aws:dlm:lifecycle-policy-id", "Value": "policy-0123456789abcdef0"}]),
+    ],
+)
+@mock_aws
+def test_ignores_backup_and_dlm_snapshots(description: str, tags: list) -> None:
+    session = make_session()
+    ignore = builtin_snapshots(session)
+    ec2 = session.client("ec2")
+    volume_id = ec2.create_volume(AvailabilityZone=f"{REGION}a", Size=20)["VolumeId"]
+    params = {"VolumeId": volume_id, "Description": description}
+    if tags:  # moto accepts "aws:" tags; real AWS only lets AWS services set them
+        params["TagSpecifications"] = [{"ResourceType": "snapshot", "Tags": tags}]
+    ec2.create_snapshot(**params)
+
+    assert run_check(session, ignore, now=days_later(91)) == []
+
+
+@mock_aws
+def test_includes_disabled_amis() -> None:
+    """Snapshots behind a disabled AMI are still in use (moto can't disable AMIs, so we check the
+    request instead)."""
+    session = make_session()
+    sent = []
+    session.events.register(
+        "provide-client-params.ec2.DescribeImages", lambda params, **_: sent.append(params)
+    )
+
+    old_snapshots.check(session, REGION, DEFAULTS)
+
+    assert sent and all(p.get("IncludeDisabled") is True for p in sent)
 
 
 @mock_aws

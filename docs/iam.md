@@ -8,12 +8,16 @@ with `--role-arn`, and they can delete it when the work is done. No access keys 
 | File | What it is |
 |---|---|
 | `iam/read-only-policy.json` | Minimum permissions for every check: only `Describe*`/`Get*` actions and `pricing:GetProducts`. A test (`tests/test_iam_policy.py`) fails if the code calls anything not listed here. |
-| `iam/trust-policy.example.json` | Who may assume the role: your (consultant) account, and only with the agreed external ID. Placeholders only. |
+| `iam/trust-policy.example.json` | Who may assume the role: one role in your (consultant) account, and only with the agreed external ID. Placeholders only. |
 
 ## Client setup (AWS CLI, in the client account)
 
 1. Agree on an external ID (a random string, e.g. `uuidgen`). Fill in the trust policy:
-   replace `<CONSULTANT-ACCOUNT-ID>` with **your** account ID and `<EXTERNAL-ID>` with the string.
+   replace `<CONSULTANT-ACCOUNT-ID>` and `<CONSULTANT-ROLE-NAME>` with **your** account ID and the
+   role you scan from, and `<EXTERNAL-ID>` with the string. Naming one role (not the account's
+   `:root`) means only that role can assume the client role. Use the exact ARN from
+   `aws iam get-role --role-name <NAME> --query Role.Arn` (it includes any path); for an IAM
+   user, use `:user/<NAME>` instead.
 2. Create the role and attach the policy:
    ```sh
    aws iam create-role --role-name CwfReadOnly \

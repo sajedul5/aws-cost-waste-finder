@@ -41,6 +41,8 @@ def test_csv_rows_sorted_with_header() -> None:
 def test_csv_blocks_formula_injection() -> None:
     assert csv_safe("=HYPERLINK(1)") == "'=HYPERLINK(1)"
     assert csv_safe("-1+1") == "'-1+1"
+    assert csv_safe("\t=1") == "'\t=1"
+    assert csv_safe("\r=1") == "'\r=1"
     assert csv_safe("vol-123") == "vol-123"
 
 
@@ -115,3 +117,23 @@ def test_cli_rejects_unknown_format() -> None:
     result = CliRunner().invoke(cli, ["scan", "--region", "ap-southeast-1", "--format", "pdf"])
     assert result.exit_code != 0
     assert "pdf" in result.output
+
+
+def test_heuristic_findings_say_verify_before_deleting() -> None:
+    rows = {r[1]: r for r in csv.reader(io.StringIO(render_csv(findings(), REGIONS, DAY)))}
+    assert rows["snap-0aaa1111bbbb2222c"][3] == "old (verify before deleting)"
+    assert rows["nat-0ccc3333dddd4444e"][3] == "idle"
+
+    report = json.loads(render_json(findings(), REGIONS, DAY))
+    verify = {f["resource_id"]: f["verify_before_deleting"] for f in report["findings"]}
+    assert verify["snap-0aaa1111bbbb2222c"] is True
+    assert verify["nat-0ccc3333dddd4444e"] is False
+
+    html = render_html(findings(), REGIONS, DAY)
+    assert "old (verify before deleting)" in html
+    assert "confirm with the resource owner" in html
+
+
+def test_no_verify_note_without_heuristic_findings() -> None:
+    plain = [f for f in findings() if f.check != "old-snapshot"]
+    assert "verify before deleting" not in render_html(plain, REGIONS, DAY)

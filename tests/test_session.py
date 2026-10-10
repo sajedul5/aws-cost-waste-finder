@@ -64,3 +64,10 @@ def test_external_id_needs_role_arn() -> None:
     result = CliRunner().invoke(cli, ["scan", "--region", "ap-southeast-1", "--external-id", "x"])
     assert result.exit_code != 0
     assert "--external-id needs --role-arn" in result.output
+
+
+@mock_aws
+def test_clients_use_adaptive_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "ap-southeast-1")
+    for session in (make_session(), make_session(ROLE_ARN)):
+        assert session.client("ec2").meta.config.retries["mode"] == "adaptive"

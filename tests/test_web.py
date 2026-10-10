@@ -107,6 +107,18 @@ def test_rejects_other_host_names(server) -> None:
     assert response.status == 403
 
 
+@pytest.mark.parametrize("host", ["localhost", "127.0.0.1:8080", "[::1]", "[::1]:8080"])
+def test_accepts_local_host_names(server, host: str) -> None:
+    response, _ = request(server, "GET", "/", headers={"Host": host})
+    assert response.status == 200
+
+
+def test_bad_content_length(server) -> None:
+    response, _ = request(server, "POST", "/scan", headers={"Content-Length": "abc"})
+    assert response.status == 400
+    assert server.calls == []
+
+
 def test_rejects_cross_site_post(server) -> None:
     response, _ = request(
         server, "POST", "/scan", {"organization": "X"}, {"Origin": "https://evil.example"}

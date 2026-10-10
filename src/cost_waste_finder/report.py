@@ -9,6 +9,29 @@ from cost_waste_finder.models import Finding
 
 CSV_COLUMNS = ["check", "resource_id", "region", "reason", "monthly_cost_usd"]
 
+# Heuristic checks: right most of the time, but a wrong delete hurts (an LB that serves a rarely
+# used site, a snapshot kept for compliance). Reports tell the reader to confirm first.
+VERIFY_CHECKS = {"idle-load-balancer", "old-snapshot"}
+VERIFY_NOTE = (
+    'Findings marked "verify before deleting" are based on traffic or age: confirm with the '
+    "resource owner before removing them."
+)
+
+
+def needs_verify(finding: Finding) -> bool:
+    return finding.check in VERIFY_CHECKS
+
+
+def report_reason(finding: Finding) -> str:
+    """The reason as shown in reports, with a warning on heuristic findings."""
+    if needs_verify(finding):
+        return f"{finding.reason} (verify before deleting)"
+    return finding.reason
+
+
+def verify_note(findings: list[Finding]) -> str | None:
+    return VERIFY_NOTE if any(needs_verify(f) for f in findings) else None
+
 
 def sort_by_savings(findings: list[Finding]) -> list[Finding]:
     """Highest monthly cost first; findings without a price go last."""
@@ -41,13 +64,15 @@ def render_markdown(
         "|---|---|---|---|---:|",
     ]
     for f in sort_by_savings(findings):
-        cells = [f.check, f.resource_id, f.region, f.reason, format_cost(f.monthly_cost)]
+        cells = [f.check, f.resource_id, f.region, report_reason(f), format_cost(f.monthly_cost)]
         lines.append("| " + " | ".join(escape(cell) for cell in cells) + " |")
     lines.append(f"| **Total** | | | | **${total:,.2f}** |")
 
     unpriced = sum(1 for f in findings if f.monthly_cost is None)
     if unpriced:
         lines += ["", f"{unpriced} finding(s) have no price (n/a) and are not in the total."]
+    if note := verify_note(findings):
+        lines += ["", note]
     return "\n".join(lines) + "\n"
 
 
@@ -78,7 +103,7 @@ def render_csv(findings: list[Finding], regions: list[str], scanned_on: date | N
     for f in sort_by_savings(findings):
         cost = "" if f.monthly_cost is None else f"{f.monthly_cost:.2f}"
         writer.writerow(
-            [csv_safe(f.check), csv_safe(f.resource_id), f.region, csv_safe(f.reason), cost]
+            [csv_safe(f.check), csv_safe(f.resource_id), f.region, csv_safe(report_reason(f)), cost]
         )
     return out.getvalue()
 
@@ -94,6 +119,7 @@ def render_json(findings: list[Finding], regions: list[str], scanned_on: date | 
                 "resource_id": f.resource_id,
                 "region": f.region,
                 "reason": f.reason,
+                "verify_before_deleting": needs_verify(f),
                 "monthly_cost_usd": f.monthly_cost,
                 "details": f.details,
             }
@@ -104,5 +130,5 @@ def render_json(findings: list[Finding], regions: list[str], scanned_on: date | 
 
 
 def csv_safe(text: str) -> str:
-    """Stop spreadsheet apps from running a cell as a formula (CSV injection)."""
-    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+    """Stop spreadsheet apps from running a cell as a formula (CSV injection, OWASP list)."""
+    return "'" + text if text[:1] in ("=", "+", "-", "@", "\t", "\r") else text

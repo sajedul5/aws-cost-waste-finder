@@ -1,4 +1,5 @@
 import boto3
+import pytest
 from helpers import MB, REGION, days_later, put_daily
 from moto import mock_aws
 
@@ -38,7 +39,11 @@ def test_finds_idle_instance() -> None:
     assert finding.check == "idle-ec2"
     assert "t3.micro running, avg CPU 1.0%" in finding.reason
     assert "(14 days)" in finding.reason
-    assert finding.details == {"instance_type": "t3.micro", "operating_system": "Linux"}
+    assert finding.details == {
+        "instance_type": "t3.micro",
+        "operating_system": "Linux",
+        "software": "NA",
+    }
 
 
 @mock_aws
@@ -108,6 +113,22 @@ def test_skips_instance_without_metrics() -> None:
     launch(session)
 
     assert idle_ec2.check(session, REGION, Thresholds(), now=LATER) == []
+
+
+@pytest.mark.parametrize(
+    ("instance", "expected"),
+    [
+        ({"PlatformDetails": "Linux/UNIX"}, ("Linux", "NA")),
+        ({"PlatformDetails": "Red Hat Enterprise Linux"}, ("RHEL", "NA")),
+        ({"PlatformDetails": "SUSE Linux"}, ("SUSE", "NA")),
+        ({"PlatformDetails": "Windows with SQL Server Standard"}, ("Windows", "SQL Std")),
+        ({"PlatformDetails": "Windows BYOL"}, (None, "NA")),  # can't price: n/a
+        ({"Platform": "windows"}, ("Windows", "NA")),  # no PlatformDetails: old fallback
+        ({}, ("Linux", "NA")),
+    ],
+)
+def test_platform(instance: dict, expected: tuple) -> None:
+    assert idle_ec2.platform(instance) == expected
 
 
 def test_check_is_registered() -> None:
